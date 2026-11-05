@@ -1,0 +1,14 @@
+{
+  "name": "dayspear",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DaySpear — team scheduling, made simple. Zero-dependency Node server + web app.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "build": "node build.mjs --single",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node build.mjs && node --disable-warning=ExperimentalWarning --watch-path=server server/index.js",
+    "test": "node build.mjs && node --disable-warning=ExperimentalWarning --test test/*.test.mjs"
+  }
+}

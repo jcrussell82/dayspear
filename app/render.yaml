@@ -1,0 +1,43 @@
+# Render Blueprint — deploys DaySpear from your GitHub repo.
+# Render → New → Blueprint → pick this repo. Review the plan before confirming:
+# a persistent disk needs a paid instance (Starter at the time of writing).
+services:
+  - type: web
+    name: dayspear
+    runtime: node
+    plan: starter
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    numInstances: 1            # SQLite + in-memory rate limits: run exactly one instance
+    disk:
+      name: dayspear-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /var/data/dayspear.db
+      - key: APP_SECRET
+        generateValue: true
+      - key: APP_URL              # e.g. https://app.yourdomain.com
+        sync: false
+      - key: EMAIL_PROVIDER       # resend or postmark
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false
+      - key: STRIPE_SECRET_KEY    # sk_test_... while testing
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_TEAM
+        sync: false
+      - key: STRIPE_PRICE_BUSINESS
+        sync: false
+      - key: ALLOW_LIVE_PAYMENTS
+        value: "false"

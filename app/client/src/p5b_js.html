@@ -1,0 +1,192 @@
+
+/* ------------------------- Seed data ------------------------- */
+function seedPeople(){
+  const P=JSON.parse(JSON.stringify(PEOPLE_SEED));
+  const anyDay=()=>Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,{t:'any',s:'06:00',e:'18:00'}]));
+  const bd=n=>{const x=addDays(TODAY,n); return {m:x.getMonth()+1,d:x.getDate()};};
+  let k=10;
+  for(const id of Object.keys(P)){ const p=P[id];
+    Object.assign(p,{access:p.access||'employee',manages:p.manages||[],status:p.status||'active',roles:p.role?[p.role]:[],phone:`(612) 555-01${String(k++).padStart(2,'0')}`,email:p.first.toLowerCase()+'@example.com',
+      avail:anyDay(),prefHours:[20,32],prefShifts:[],notif:{channels:{push:true,email:true,sms:false},events:{schedule:true,openShifts:true,requests:true,messages:true,announcements:true}},
+      birthday:null,bdayOptIn:false,sharePhone:false,theme:'system',verified:{email:true,phone:true}}); }
+  P.mgr.roles=['lead']; P.mgr.prefHours=[35,45]; P.mgr.notif.follow=['dt','rv'];
+  P.mgr2.roles=['lead']; P.mgr2.prefHours=[30,40]; P.mgr2.notif.follow=['rv']; P.mgr2.email='priya@example.com';
+  P.e1.avail[4]={t:'off',s:'06:00',e:'18:00'}; P.e1.avail[6]={t:'off',s:'06:00',e:'18:00'}; P.e1.prefShifts=['morning','weekend']; P.e1.prefHours=[20,28];
+  P.e1.birthday={m:6,d:21}; P.e1.notif.channels.sms=true;
+  P.e2.roles=['lead','barista','counter']; P.e2.birthday=bd(2); P.e2.bdayOptIn=true; P.e2.sharePhone=true; P.e2.prefShifts=['morning'];
+  P.e3.avail[6]={t:'off',s:'06:00',e:'18:00'}; P.e3.prefShifts=['morning'];
+  P.e4.avail[0]={t:'range',s:'11:00',e:'20:00'}; P.e4.prefShifts=['afternoon','evening'];
+  P.e5.birthday={m:9,d:3}; P.e5.bdayOptIn=true; P.e5.roles=['counter','barista'];
+  P.e9.roles=['bakery','barista']; P.e7.roles=['lead','counter'];
+  P.e10.invited='Sent 2 days ago'; Object.assign(P.e6,{status:'invited',invited:'Sent yesterday',inviteExpires:6,invitedBy:'mgr2',verified:{email:false,phone:false}}); P.e10.inviteExpires=5; P.e10.verified={email:false,phone:false}; P.e10.invitedBy='mgr2'; P.e11.archived='Left in October';
+  return P;
+}
+function seed(){
+  const S=[]; const add=(w,d,emp,s,e,role,loc,extra={})=>{const o={id:nid('s'),w,d,emp,s,e,role,loc,ck:null,draft:false,...extra}; S.push(o); return o;};
+  const ids={};
+  for(const w of [0,1]){
+    for(const d of [0,1,2,3,4]) add(w,d,'e8','04:30','12:30','bakery','dt');
+    for(const d of [0,1,3,4,5]) add(w,d,'e2','06:00','14:00','lead','dt',{ck:'cl-open-dt'});
+    for(const d of [0,2,3]) add(w,d,'e1','06:00','12:00','barista','dt',{ck:'cl-bar-dt'});
+    add(w,5,'e1','07:00','13:00','barista','dt',{ck:'cl-bar-dt'});
+    for(const d of [1,2,4,6]) add(w,d,'e4','12:00','18:00','barista','dt',{ck:'cl-close-dt'});
+    ids['mThu'+w]=add(w,3,'e4','12:00','18:00','barista','dt',{ck:'cl-close-dt'});
+    for(const d of [0,2,4,5]) add(w,d,'e3','07:00','15:00','counter','dt');
+    for(const d of [5,6]) add(w,d,'e9','04:30','12:30','bakery','dt');
+    for(const d of [0,1,2,3,6]) add(w,d,'e7','06:00','14:00','lead','rv',{ck:'cl-open-rv'});
+    for(const d of [0,2,4]) add(w,d,'e5','07:00','15:00','counter','rv');
+    ids['sofTue'+w]=add(w,1,'e5','14:00','20:00','counter','rv');
+    ids['sofSat'+w]=add(w,5,'e5','07:00','13:00','barista','rv');
+    for(const d of [0,1,3,4,5]) add(w,d,'e6','06:00','12:00','barista','rv');
+    add(w,2,'e6','12:00','18:00','barista','rv');
+    add(w,1,'e9','07:00','13:00','barista','rv');
+  }
+  // Maya has approved time off this Sunday, so no shift; next week's Wed for Marcus is an unpublished draft
+  Object.assign(S.find(s=>s.w===1&&s.emp==='e4'&&s.d===2),{draft:true,draftBy:'mgr'});
+  Object.assign(S.find(s=>s.w===1&&s.emp==='e6'&&s.d===2&&s.s==='12:00'),{draft:true,draftBy:'mgr2',s:'13:00',e:'19:00',pub:{emp:'e6',d:2,s:'12:00',e:'18:00',role:'barista',loc:'rv'}});
+  const openSun = add(1,6,null,'07:00','13:00','barista','dt',{cover:{status:'needed',from:null,note:'Weekend rush — extra hands on the bar.'}});
+  ids['sofSat1'].cover={status:'needed',from:'e5',note:'Family visiting that weekend, sorry!'};
+  ids['mThu1'].cover={status:'offered',from:'e4',offerBy:'e9',note:'Dentist appointment at 1pm.'};
+  const mTue1=S.find(s=>s.w===1&&s.emp==='e4'&&s.d===1); mTue1.cover={status:'needed',from:'e4',target:'e1',note:'Concert that night — could you take this one?'};
+  const timeoff=[
+    {id:nid('t'),emp:'e3',w:1,d:4,status:'pending',reason:'Sister’s wedding rehearsal',sent:'Yesterday'},
+    {id:nid('t'),emp:'e9',w:1,d:6,status:'pending',reason:'Moving apartments',sent:'2 days ago'},
+    {id:nid('t'),emp:'e5',w:1,d:2,s:'13:00',e:'15:00',status:'pending',reason:'Dentist appointment',sent:'This morning'},
+    {id:nid('t'),emp:'e7',w:1,d:4,days:2,status:'approved',reason:'Long weekend away',sent:'Last week',decidedBy:'mgr2',decidedAt:'Last Thu'},
+    {id:nid('t'),emp:'e1',w:0,d:6,status:'approved',reason:'Cousin’s birthday',sent:'Last week',decidedBy:'mgr',decidedAt:'Last Wed'}
+  ];
+  const coverLog=[{id:nid('c'),shiftId:ids['sofTue1'].id,from:'e7',to:'e5',when:'Today 9:14 AM',by:'mgr2'}];
+  const checklists=[
+    {id:'cl-open-dt',name:'Opening duties',loc:'dt',assign:{type:'shift',label:'Opening shift lead'},items:[
+      {t:'Disarm alarm, lights on',done:true},{t:'Ovens to 375°F',done:true},{t:'Count cash drawer ($200 float)',done:false},{t:'Stock pastry case & label allergens',done:false},{t:'Check fridge temps & log them',done:false},{t:'Unlock front door at 6:30',done:false}]},
+    {id:'cl-bar-dt',name:'Espresso bar setup',loc:'dt',assign:{type:'shift',label:'Morning barista'},items:[
+      {t:'Turn on grinders & dial in espresso',done:false},{t:'Fill milk fridge and ice bin',done:false},{t:'Restock cups, lids & sleeves',done:false},{t:'Wipe steam wands',done:false}]},
+    {id:'cl-close-dt',name:'Closing duties',loc:'dt',assign:{type:'shift',label:'Closing barista'},items:[
+      {t:'Backflush espresso machine',done:false},{t:'Wrap & date leftover pastries',done:false},{t:'Sweep and mop floor',done:false},{t:'Count drawer and drop deposit',done:false},{t:'Set alarm, lock up',done:false}]},
+    {id:'cl-open-rv',name:'Opening duties',loc:'rv',assign:{type:'shift',label:'Opening shift lead'},items:[
+      {t:'Lights, music, heaters on',done:true},{t:'Count cash drawer',done:true},{t:'Stock pastry case',done:true},{t:'Unlock front door at 7:00',done:false}]},
+    {id:'cl-deep-rv',name:'Weekly deep clean',loc:'rv',assign:{type:'location',label:'Anyone at Riverside'},items:[
+      {t:'Pull out and clean under fridges',done:false},{t:'Descale kettles',done:false},{t:'Wash patio furniture',done:false}]}
+  ];
+  const friOpen = S.find(s=>s.w===1&&s.d===4&&s.emp==='e2');
+  const tasks=[
+    {id:nid('k'),title:'Descale the espresso machine',assign:{type:'person',ref:'e1'},due:{w:1,d:3},status:'todo',items:[{t:'Run descaler through both groups',done:false},{t:'Flush with clean water',done:false},{t:'Log it on the maintenance sheet',done:false}]},
+    {id:nid('k'),title:'Count flour & butter for the weekly order',assign:{type:'shift',ref:friOpen.id},due:{w:1,d:4},status:'todo'},
+    {id:nid('k'),title:'Restock to-go cups & lids',assign:{type:'location',ref:'rv'},due:null,status:'doing',items:[{t:'Count what’s left in the back',done:true},{t:'Order 12oz and 16oz lids',done:true},{t:'Order sleeves',done:false},{t:'Restock the front counter',done:false}]},
+    {id:nid('k'),title:'Show Theo the new register screen',assign:{type:'person',ref:'e7'},due:{w:1,d:1},status:'doing'},
+    {id:nid('k'),title:'Wipe down patio furniture',assign:{type:'location',ref:'dt'},due:{w:1,d:5},status:'todo'},
+    {id:nid('k'),title:'Update the holiday menu board',assign:{type:'person',ref:'e2'},due:{w:0,d:2},status:'done'}
+  ];
+  const announcements=[
+    {id:nid('a'),title:'Holiday hours are posted',text:'We close at 2pm on Christmas Eve and stay closed Christmas Day at both shops. Holiday time-off requests are due by Dec 1 so I can plan coverage fairly.',from:'mgr',loc:null,when:'Mon 8:02 AM',pinned:true,seen:['e2','e3','e4','e7','e8','e5']},
+    {id:nid('a'),title:'New oat milk supplier starts Monday',text:'Cartons look different (blue label) but it steams the same. Use the old stock first—check the dates.',from:'mgr',loc:null,when:'Yesterday 4:15 PM',pinned:false,seen:['e2','e7','e6','e9','e1']},
+    {id:nid('a'),title:'Riverside patio opens Saturday',text:'Weather looks good, so we’re opening the patio this weekend. Openers: wipe down tables and put out the heaters by 7.',from:'mgr2',loc:'rv',when:'Today 7:30 AM',pinned:false,seen:['e7']}
+  ];
+  const messages={
+    'team-all':[
+      {from:'e7',text:'Riverside sold out of cardamom buns by 10 again 🙌',when:'Mon 10:12 AM'},
+      {from:'e8',text:'I’ll bake an extra tray for Riverside tomorrow. Sam, can you take them over at 7?',when:'Mon 10:20 AM'},
+      {from:'e9',text:'Yep, on it.',when:'Mon 10:22 AM'}],
+    'team-dt':[
+      {from:'e2',text:'Grinder #2 is making a weird noise—using #1 for now.',when:'Today 7:40 AM'},
+      {from:'mgr',text:'Thanks Jordan. The tech is booked for Thursday morning.',when:'Today 8:05 AM'},
+      {from:'e1',text:'Got it 👍',when:'Today 8:11 AM'}],
+    'team-rv':[
+      {from:'e5',text:'Anyone seen the extra receipt rolls?',when:'Yesterday 2:31 PM'},
+      {from:'e7',text:'Back shelf, top left, behind the syrups.',when:'Yesterday 2:40 PM'},
+      {from:'mgr2',text:'I’ll drop off a new box tomorrow morning.',when:'Yesterday 3:05 PM'}]
+  };
+  messages['sh-'+ids['sofSat1'].id]=[{from:'e5',text:'Posted my Saturday shift — family is in town. Happy to swap for a weekday.',when:'Yesterday 6:02 PM'}];
+  messages['sh-'+ids['mThu1'].id]=[{from:'e4',text:'Dentist at 1pm Thursday, sorry for the late notice.',when:'Today 9:30 AM'},{from:'e9',text:'I can cover it—I’m free after my Riverside shift.',when:'Today 9:41 AM'}];
+  messages['sh-'+mTue1.id]=[{from:'e4',text:'Hey Maya — any chance you could take my Tuesday? Concert that night 🎸',when:'Today 8:50 AM'}];
+  messages['dm-e1-e2']=[{from:'e2',text:'Can you bring the spare apron Thursday?',when:'Yesterday 5:10 PM'},{from:'e1',text:'Yes! Will do.',when:'Yesterday 5:22 PM'}];
+  messages['sh-'+openSun.id]=[{from:'mgr',text:'Adding a second barista for Sunday — first come, first served.',when:'Today 11:00 AM'}];
+  const settings={
+    business:{name:'Hearth & Grain',type:'Bakery & café'},
+    sched:{weekStart:'Monday',otHours:40,notifyChangedOnly:true},
+    requests:{autoApprove:false,namedSwaps:true,partialDay:true,multiDay:true,noticeDays:7},
+    messages:{teamChat:true,birthdays:true,phoneSharing:false,quietHours:true,defaults:{push:true,email:true,sms:false}},
+    tasks:{progress:'today',resetAt:'04:00',whoCreates:'leads'}
+  };
+  const published={0:{dt:{by:'mgr',when:'Fri 4:10 PM'},rv:{by:'mgr2',when:'Fri 2:45 PM'}},1:{dt:{by:'mgr',when:'Tue 3:12 PM'},rv:{by:'mgr2',when:'Mon 5:40 PM'}}};
+  return {v:5, billing:{plan:'Free',card:null}, published, people:seedPeople(), order:ORDER_SEED.slice(), locs:JSON.parse(JSON.stringify(LOCS_SEED)), roles:{...ROLES_SEED}, settings, shifts:S, timeoff, coverLog, checklists, tasks, announcements, messages,
+    unread:{'team-rv':2,'team-all':1}, empAnnRead:false, deleted:{}};
+}
+
+/* ------------------------- State & persistence ------------------------- */
+const STORE='dayspear-prototype-v1';
+let D=null;
+try{ D=JSON.parse(localStorage.getItem(STORE)); }catch(e){ D=null; }
+if(!D||D.v!==5) D=seed();
+const save=()=>{ if(REAL){ queueSync(); return; } try{ localStorage.setItem(STORE, JSON.stringify(D)); }catch(e){} };
+function syncRefs(){ PEOPLE=D.people; LOCS=D.locs; ROLES=D.roles; EMP_IDS=D.order.filter(id=>PEOPLE[id]&&PEOPLE[id].status!=='archived'); }
+syncRefs();
+const activeIds=()=>EMP_IDS.filter(id=>PEOPLE[id].status==='active');
+/* ---- Managers & permissions ---- */
+const isMgr = id=>!!PEOPLE[id]&&(PEOPLE[id].access==='owner'||PEOPLE[id].access==='manager');
+const isOwner = id=>!!PEOPLE[id]&&PEOPLE[id].access==='owner';
+const mgrIds = ()=>Object.keys(PEOPLE).filter(id=>isMgr(id)&&PEOPLE[id].status==='active').sort((a,b)=>isOwner(b)-isOwner(a));
+const managesLoc = (id,loc)=>isOwner(id)||(isMgr(id)&&(PEOPLE[id].manages||[]).includes(loc));
+const canManage = loc=>managesLoc(ME_MGR,loc);
+const myLocs = ()=>Object.keys(LOCS).filter(canManage);
+const mgrsFor = loc=>mgrIds().filter(id=>(PEOPLE[id].manages||[]).includes(loc));
+const mgrNames = locs=>{ const s=[...new Set(locs.flatMap(mgrsFor))]; return s.length?listNames(s.map(firstOf)):'your manager'; };
+const locNames = locs=>listNames(locs.filter(l=>LOCS[l]).map(l=>LOCS[l].name));
+const mgrLabel = id=>isOwner(id)?'Owner':'Manager · '+locNames(PEOPLE[id].manages||[]);
+const follows = loc=>((PEOPLE[ME_MGR].notif||{}).follow||Object.keys(LOCS)).includes(loc);
+const canDecideTO = t=>PEOPLE[t.emp]&&PEOPLE[t.emp].locs.some(canManage);
+const toLocs = t=>PEOPLE[t.emp]?PEOPLE[t.emp].locs:[];
+const snapPub = s=>{ if(!s.draft&&!s.pub) s.pub={emp:s.emp,d:s.d,s:s.s,e:s.e,role:s.role,loc:s.loc}; };
+const markDraft = s=>{ s.draft=true; s.draftBy=ME_MGR; };
+
+const UI = { view:'schedule', week:1, loc:'all', reqTab:'timeoff', channel:'ann', taskView:'list', taskFilter:'all', openCl:{'cl-open-dt':true}, emp:{tab:'home', thread:null} };
+
+/* ------------------------- Queries ------------------------- */
+const shiftsIn = (w,loc=UI.loc)=>D.shifts.filter(s=>s.w===w&&(loc==='all'||s.loc===loc));
+const shiftById = id=>D.shifts.find(s=>s.id===id);
+const gi=(w,d)=>7*w+d;
+const inTO=(t,w,d)=>gi(w,d)>=gi(t.w,t.d)&&gi(w,d)<gi(t.w,t.d)+(t.days||1);
+const timeOffFor = (emp,w,d)=>D.timeoff.find(t=>t.emp===emp&&t.status!=='declined'&&inTO(t,w,d));
+const toCovers = (t,s)=>inTO(t,s.w,s.d)&&(!t.s||(toMin(t.s)<toMin(s.e)&&toMin(s.s)<toMin(t.e)));
+const toEnd = t=>{const g=gi(t.w,t.d)+(t.days||1)-1; return {w:Math.floor(g/7),d:g%7};};
+const toWhen = t=>{ if(t.s) return `${fmtDay(t.w,t.d)} · ${fmtT(t.s)}–${fmtT(t.e)}`; if((t.days||1)>1){const e=toEnd(t); return `${fmtDay(t.w,t.d)} – ${fmtDay(e.w,e.d)} · ${t.days} days`;} return `${fmtDay(t.w,t.d)} · All day`; };
+const availOn=(id,d)=>(PEOPLE[id].avail||{})[d];
+const pendingTO = ()=>D.timeoff.filter(t=>t.status==='pending');
+const needsCover = ()=>D.shifts.filter(s=>s.cover&&!isPast(s.w,s.d)).sort((a,b)=>a.w-b.w||a.d-b.d);
+const delKey=(w,l)=>w+'|'+l;
+const draftsIn=(w,locs)=>D.shifts.filter(s=>s.w===w&&s.draft&&locs.includes(s.loc));
+const draftCount=(w,locs=myLocs())=>draftsIn(w,locs).length+locs.reduce((a,l)=>a+(D.deleted[delKey(w,l)]||0),0);
+function conflictsFor(shift, ignoreId){
+  const out=[]; if(!shift.emp) return out;
+  const to=timeOffFor(shift.emp,shift.w,shift.d);
+  if(to&&toCovers(to,shift)) out.push({kind:to.status, to});
+  const av=availOn(shift.emp,shift.d);
+  if(av&&(av.t==='off'||(av.t==='range'&&(toMin(shift.s)<toMin(av.s)||toMin(shift.e)>toMin(av.e))))) out.push({kind:'unavail',av});
+  D.shifts.filter(s=>s.id!==ignoreId&&s.emp===shift.emp&&overlaps(s,shift)).forEach(s=>out.push({kind:'overlap',s}));
+  if(!PEOPLE[shift.emp].locs.includes(shift.loc)) out.push({kind:'loc'});
+  return out;
+}
+const availableFor = shift=>activeIds().filter(id=>id!==shift.emp && PEOPLE[id].locs.includes(shift.loc) && !conflictsFor({...shift,emp:id},shift.id).length);
+const checklistById = id=>D.checklists.find(c=>c.id===id);
+
+/* ------------------------- Toast & modal ------------------------- */
+function toast(msg, undo){
+  if(REAL) msg=String(msg).replace(/\s*\((?:prototype|Prototype)[^)]*\)/g,'');
+  const el=document.createElement('div'); el.className='toast';
+  el.innerHTML=`<span>${msg}</span>${undo?'<button type="button">Undo</button>':''}`;
+  if(undo) el.querySelector('button').onclick=()=>{undo(); el.remove();};
+  $('#toasts').appendChild(el); setTimeout(()=>el.remove(), undo?6500:3600);
+}
+let lastFocus=null;
+function openModal(html, onMount){
+  lastFocus=document.activeElement;
+  $('#modal').innerHTML=html; $('#scrim').classList.add('open');
+  onMount&&onMount($('#modal'));
+  const f=$('#modal .modal-body').querySelector('input,select,textarea'); f&&f.focus();
+}
+function closeModal(){ $('#scrim').classList.remove('open'); $('#modal').innerHTML=''; $('#modal').className='modal'; if(lastFocus&&document.body.contains(lastFocus)) lastFocus.focus(); }
+$('#scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#scrim').classList.contains('open')) closeModal(); });
+document.addEventListener('click',e=>{ if(e.target.closest('[data-close]')) closeModal(); });
+const modalHead = t=>`<div class="modal-head"><h3 id="modalTitle">${t}</h3><button class="icon-btn" type="button" data-close aria-label="Close">${icon('x')}</button></div>`;
+function commit(){ save(); syncRefs(); render(); }

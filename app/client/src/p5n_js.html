@@ -1,0 +1,124 @@
+
+/* ======================= BILLING CONCEPT (prototype — no real payments) =======================
+   Rules: only the owner upgrades or pays. Charging starts when the owner confirms an upgrade,
+   never automatically. If someone accepts an invite and takes the business over its plan,
+   they still get in; the owner has a 14-day grace period, after which no *new* people can be
+   added until they upgrade. Nobody ever loses access. */
+const subPlan = ()=>PRICING.plans.find(p=>p.name===((D.billing||{}).plan||PRICING.plans[0].name))||PRICING.plans[0];
+const pendingCount = ()=>Object.keys(PEOPLE).filter(i=>PEOPLE[i].status==='invited').length;
+const projectedCount = ()=>activeCount()+pendingCount();
+const overLimit = ()=>activeCount()>subPlan().limit;
+const fmtDate = d=>`${MONTHS[d.getMonth()]} ${d.getDate()}`;
+const ownerName = ()=>listNames(mgrIds().filter(isOwner).map(firstOf))||'the owner';
+function graceInfo(){
+  if(REAL){ const g=(D.billing||{}).graceUntil; if(!overLimit()||!g) return null; const until=new Date(g); return {until,days:Math.max(0,Math.ceil((until-Date.now())/864e5))}; }
+  D.billing=D.billing||{plan:PRICING.plans[0].name,card:null};
+  if(!overLimit()){ if(D.billing.graceUntil){ delete D.billing.graceUntil; save(); } return null; }
+  if(!D.billing.graceUntil){ D.billing.graceUntil=addDays(TODAY,14).toISOString(); save(); }
+  const until=new Date(D.billing.graceUntil); const days=Math.max(0,Math.round((until-TODAY)/864e5));
+  return {until,days};
+}
+// Gate any action that adds an active (or pending) person. Runs onOk only if allowed.
+function requireRoomFor(extra,onOk,what){
+  const need=projectedCount()+extra, cur=subPlan();
+  if(need<=cur.limit) return onOk();
+  const next=PRICING.plans.find(p=>need<=p.limit);
+  if(!isOwner(ME_MGR)){
+    openModal(`${modalHead('Plan limit reached')}<div class="modal-body"><div class="alert amber">ℹ<div>${esc(D.settings.business.name)} is on the <b>${esc(cur.name)}</b> plan, which covers ${cur.limit} people. ${esc(what||'This')} would go over it.</div></div>
+      <p style="color:var(--ink-2);font-size:14px">Only the owner can change the plan. Ask ${esc(ownerName())} to upgrade, then try again.</p></div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Close</button>${mgrIds().filter(isOwner)[0]?`<button type="button" class="btn btn-primary btn-sm" data-msgperson="${mgrIds().filter(isOwner)[0]}">Message ${esc(ownerName())}</button>`:''}</div>`);
+    return;
+  }
+  if(!next){
+    openModal(`${modalHead('Let’s talk about a bigger plan')}<div class="modal-body"><p style="color:var(--ink-2)">That would take you past ${PRICING.plans[PRICING.plans.length-1].limit} people, our largest example plan. Contact us and we’ll find what fits.</p></div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Not now</button><a class="btn btn-primary btn-sm" href="#contact" data-topic="large">Contact us</a></div>`);
+    return;
+  }
+  openUpgrade(next,onOk,what);
+}
+function openUpgrade(plan,onOk,what){
+  if(REAL) return realUpgrade(plan,onOk,what);
+  const cur=subPlan(); const bill=fmtDate(addDays(TODAY,30));
+  const card=(D.billing||{}).card;
+  openModal(`${modalHead(`Upgrade to ${esc(plan.name)}`)}<div class="modal-body">
+    ${what?`<p style="color:var(--ink-2);font-size:14px">${esc(what)} brings you to <b>${projectedCount()+(onOk?1:0)} people</b> (including pending invites). The ${esc(cur.name)} plan covers ${cur.limit}.</p>`:''}
+    <div class="up-plan"><div><b>${esc(plan.name)}</b><span>Up to ${plan.limit} people · every location included</span></div><div class="up-price">${PRICING.currency}${plan.price}<small>${PRICING.period}</small></div></div>
+    <dl class="kv"><dt>Starts</dt><dd>Today, when you confirm</dd><dt>Next bill</dt><dd>${bill}</dd><dt>Change or cancel</dt><dd>Anytime in Settings › Plan</dd></dl>
+    <div class="field"><span class="lbl">Payment method</span>
+      <div id="up-card">${card?`<div class="card-on">${icon('card',18)} <b>${esc(card.brand)} •••• ${esc(card.last4)}</b><span class="muted">· on file</span></div>`:
+      `<div class="card-ph"><div>${icon('lock',16)} <b>Card details are entered with our payment provider</b></div><p>The real product hands this step to a secure payment provider. DaySpear never sees or stores full card numbers. <span class="muted">Prototype: no card is collected here.</span></p><button type="button" class="btn btn-ghost btn-sm" id="up-addcard">${icon('plus',13)} Add a test card</button></div>`}</div></div>
+    <p class="muted" style="font-size:12px">Provisional example pricing for review. Nothing is charged in this prototype.</p>
+  </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Not now</button><button type="button" class="btn btn-primary btn-sm" id="up-confirm" ${card?'':'disabled'}>${onOk?`Upgrade and ${esc(what&&/restor/i.test(what)?'restore':'send invite')}`:'Confirm upgrade'}</button></div>`, m=>{
+    const ac=$('#up-addcard',m); if(ac) ac.onclick=()=>{ D.billing=D.billing||{}; D.billing.card={brand:'Visa',last4:'4242'}; save(); $('#up-card',m).innerHTML=`<div class="card-on">${icon('card',18)} <b>Visa •••• 4242</b><span class="muted">· test card added</span></div>`; $('#up-confirm',m).disabled=false; $('#up-confirm',m).focus(); };
+    $('#up-confirm',m).onclick=()=>{ Object.assign(D.billing,{plan:plan.name,since:fmtDate(TODAY),nextBill:bill}); delete D.billing.graceUntil; closeModal(); save(); toast(`Upgraded to ${esc(plan.name)} · ${PRICING.currency}${plan.price}${PRICING.period}, next bill ${bill} (prototype — nothing charged)`); if(onOk) onOk(); else commit(); };
+  });
+}
+function createInvitee({name,contact,role,locs,access='employee'}){
+  const id=nid('p');
+  D.people[id]={id,name,first:name.split(' ')[0],access,manages:access==='manager'?locs.slice():[],role,roles:[role],locs:locs.length?locs:[Object.keys(LOCS)[0]],status:'invited',invited:'Sent just now',inviteExpires:7,invitedBy:ME_MGR,verified:{email:false,phone:false},phone:contact.includes('@')?'':contact,email:contact.includes('@')?contact:'',
+    avail:Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,{t:'any',s:'06:00',e:'18:00'}])),prefHours:[0,40],prefShifts:[],notif:{channels:{...D.settings.messages.defaults},events:{schedule:true,openShifts:true,requests:true,messages:true,announcements:true}},birthday:null,bdayOptIn:false,sharePhone:false,theme:'system',photo:''};
+  if(access==='employee') D.order.push(id); else D.people[id].notif.follow=locs.slice();
+  syncRefs(); return id;
+}
+function openInvite(){
+  const cur=subPlan(), room=cur.limit-projectedCount();
+  const note = room>0
+    ? `<div class="alert green">✓<div>They’ll count toward your ${esc(cur.name)} plan once they accept (${activeCount()} active${pendingCount()?` + ${pendingCount()} invited`:''} of ${cur.limit}).</div></div>`
+    : isOwner(ME_MGR)
+      ? `<div class="alert amber">ℹ<div><b>This invite needs a bigger plan.</b> With pending invites you’d have ${projectedCount()+1} people; ${esc(cur.name)} covers ${cur.limit}. You’ll confirm the upgrade and add a payment method on the next step.</div></div>`
+      : `<div class="alert amber">ℹ<div>You’re at the ${esc(cur.name)} plan limit. Only ${esc(ownerName())} (owner) can upgrade. Ask them before inviting more people.</div></div>`;
+  openModal(`${modalHead('Invite someone')}<form id="inviteForm"><div class="modal-body">
+    <div class="row-2"><div class="field"><label for="iv-name">Full name</label><input id="iv-name" required autocomplete="off"></div><div class="field"><label for="iv-contact">Mobile or email</label><input id="iv-contact" required placeholder="They’ll get an invite link"></div></div>
+    <div class="row-2"><div class="field"><label for="iv-role">Main role</label><select id="iv-role">${Object.keys(ROLES).map(r=>`<option value="${r}">${esc(ROLES[r])}</option>`).join('')}</select></div>
+    <div class="field"><span class="lbl">Locations</span><div class="chips">${myLocs().map((l,i)=>`<label class="chip"><input type="checkbox" data-ivloc="${l}" ${i===0?'checked':''}>${esc(LOCS[l].name)}</label>`).join('')}</div></div></div>
+    ${isOwner(ME_MGR)?`<div class="field"><label for="iv-access">Invite as</label><select id="iv-access"><option value="employee">Employee — appears on the schedule</option><option value="manager">Manager of the locations above</option></select></div>`:''}
+    ${note}
+    <p class="muted" style="font-size:12px">They’ll get a secure link that works once and expires in 7 days.</p>
+  </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-primary btn-sm" type="submit" ${room>0||isOwner(ME_MGR)?'':'disabled'}>${room>0?'Send invite':'Continue to upgrade'}</button></div></form>`, m=>{
+    $('#inviteForm',m).onsubmit=e=>{ e.preventDefault(); const name=$('#iv-name',m).value.trim(); const c=$('#iv-contact',m).value.trim(); if(!name||!c) return;
+      const access=$('#iv-access',m)?$('#iv-access',m).value:'employee';
+      if(access==='manager'&&!c.includes('@')){ toast('Managers need an email address — it’s how they recover their account'); return; }
+      const locs=$$('[data-ivloc]',m).filter(x=>x.checked).map(x=>x.dataset.ivloc), role=$('#iv-role',m).value;
+      const send=()=>{ const id=nid('p');
+        D.people[id]={id,name,first:name.split(' ')[0],access,manages:access==='manager'?locs:[],role,roles:[role],locs:locs.length?locs:[Object.keys(LOCS)[0]],status:'invited',invited:'Sent just now',inviteExpires:7,invitedBy:ME_MGR,verified:{email:false,phone:false},phone:c.includes('@')?'':c,email:c.includes('@')?c:'',
+          avail:Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,{t:'any',s:'06:00',e:'18:00'}])),prefHours:[0,40],prefShifts:[],notif:{channels:{...D.settings.messages.defaults},events:{schedule:true,openShifts:true,requests:true,messages:true,announcements:true}},birthday:null,bdayOptIn:false,sharePhone:false,theme:'system',photo:''};
+        if(access==='employee') D.order.push(id); if(access==='manager') D.people[id].notif.follow=locs.slice();
+        if($('#scrim').classList.contains('open')) closeModal(); commit(); toast(`Invite sent to ${esc(name)} · the secure link expires in 7 days (prototype — nothing was sent)`); };
+      closeModal(); requireRoomFor(1,send,`Inviting ${name}`);
+    };
+  });
+}
+function planSection(){
+  if(REAL) return realPlanSection();
+  const n=activeCount(), cur=subPlan(), pend=pendingCount(), idx=PRICING.plans.indexOf(cur), next=PRICING.plans[idx+1], g=graceInfo(), bill=D.billing||{};
+  const owner=isOwner(ME_MGR), paid=cur.price>0;
+  let alert='';
+  if(g) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div><b>You have ${n} active people; the ${esc(cur.name)} plan covers ${cur.limit}.</b> Nobody loses access. ${owner?`Upgrade by ${fmtDate(g.until)} (${g.days} days) to keep adding people.`:`${esc(ownerName())} has been asked to upgrade.`}</div></div>`;
+  else if(n+pend>cur.limit) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div>${n} active + ${pend} invited = ${n+pend}. If they all accept you’ll be over the ${esc(cur.name)} plan. ${owner?'You can upgrade now, or wait — you’ll get 14 days to upgrade once you go over.':''}</div></div>`;
+  else if(n>=cur.limit) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div>You’re at the ${esc(cur.name)} limit. ${next?`Adding the next person needs <b>${esc(next.name)}</b> — about ${PRICING.currency}${next.price}${PRICING.period} for up to ${next.limit}. You’ll confirm and add a payment method first. No surprise charges, and no one loses access.`:`For more people, <a href="#contact" data-topic="large">contact us</a>.`}</div></div>`;
+  return `<div class="set-card"><div class="set-row"><div><h3 style="font-size:16px">Your plan</h3><p>Pricing is a concept for review. No real payments in this prototype.</p></div><span class="prov-banner">⚑ Provisional</span></div>
+    <div class="usage"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${esc(cur.name)}${paid?` · ${PRICING.currency}${cur.price}${PRICING.period}`:' plan'}</b><span class="muted">${n} of ${cur.limit} active members${pend?` · ${pend} invited`:''}</span></div>
+      <div class="bar"><i class="${n>=cur.limit?'full':''}" style="width:${Math.min(100,n/cur.limit*100)}%"></i></div>
+      <p class="muted" style="font-size:13px">Invited people count once they accept. Active members are counted once across all locations. Archiving someone frees their spot.</p>${alert}
+      ${owner&&(g||n+pend>=cur.limit)&&next?`<button class="btn btn-primary btn-sm" style="margin-top:12px" data-upgrade="${esc(next.name)}">Upgrade to ${esc(next.name)}</button>`:''}</div>
+    <div class="plan-mini">${PRICING.plans.map(p=>`<div class="${p===cur?'cur':''}"><span class="muted">${esc(p.name)}${p===cur?' · current':''}</span><b>${p.price?PRICING.currency+p.price:'Free'}</b>${p.price?PRICING.period+' · ':''}up to ${p.limit} people${owner&&p!==cur&&p.price>cur.price?`<button class="btn btn-ghost btn-xs" style="margin-top:8px;display:flex" data-upgrade="${esc(p.name)}">Choose ${esc(p.name)}</button>`:''}</div>`).join('')}</div>
+    ${paid?`<div class="set-row"><div><b>Billing</b><p>${bill.card?`${esc(bill.card.brand)} •••• ${esc(bill.card.last4)} · `:''}Next bill ${esc(bill.nextBill||'—')} · since ${esc(bill.since||'—')}</p></div>${owner?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="chgCard">Change card</button><button class="btn btn-ghost btn-sm" id="downFree" ${n>PRICING.plans[0].limit?'disabled title="Archive people first — Free covers '+PRICING.plans[0].limit+'"':''}>Switch to Free</button></div>`:''}</div>`:''}
+    ${!owner?`<div class="set-row"><div><b>Only ${esc(ownerName())} (owner) can change the plan or billing.</b></div></div>`:''}
+    <div class="set-row"><div><b>More than ${PRICING.plans[PRICING.plans.length-1].limit} people?</b><p>Let’s talk about what fits.</p></div><a class="btn btn-ghost btn-sm" href="#contact" data-topic="large">Contact us</a></div>
+    <div class="set-row"><div><b>Every plan includes</b><p>${PRICING.included.map(esc).join(' · ')}</p></div></div></div>`;
+}
+function renderBillBanner(){
+  const el=$('#billBanner'); if(!el) return; const g=graceInfo();
+  if(!g||UI.view==='employee'){ el.hidden=true; el.innerHTML=''; return; }
+  el.hidden=false;
+  el.innerHTML=isOwner(ME_MGR)
+    ? `${icon('card',16)}<span><b>You’re over the ${esc(subPlan().name)} plan</b> (${activeCount()} of ${subPlan().limit} people). Nobody loses access — upgrade by ${fmtDate(g.until)} to keep adding people.</span><button class="btn btn-primary btn-xs" data-upgrade="${esc((PRICING.plans.find(p=>activeCount()<=p.limit)||{}).name||'')}">Upgrade</button>`
+    : `${icon('card',16)}<span>${esc(D.settings.business.name)} is over its plan. ${esc(ownerName())} has been asked to upgrade — nothing changes for your team.</span>`;
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-upgrade],#chgCard,#downFree'); if(!t) return;
+  if(t.dataset.upgrade!==undefined){ const p=PRICING.plans.find(x=>x.name===t.dataset.upgrade); if(!p){ location.hash='#contact'; return; } if(!isOwner(ME_MGR)){ toast(`Only ${esc(ownerName())} can upgrade`); return; } openUpgrade(p,null,null); return; }
+  if(REAL&&(t.id==='chgCard'||t.id==='downFree')){ openPortal(); return; }
+  if(t.id==='chgCard'){ D.billing.card={brand:'Mastercard',last4:'5100'}; commit(); toast('Card updated (prototype — the payment provider handles this)'); return; }
+  if(t.id==='downFree'){ if(!confirm('Switch to the Free plan? You’ll stop being charged at the end of this billing period.')) return; Object.assign(D.billing,{plan:PRICING.plans[0].name}); delete D.billing.nextBill; commit(); toast('Switched to Free (prototype)'); return; }
+});

@@ -1,0 +1,169 @@
+
+/* ======================= LOGIN (prototype — no real authentication) =======================
+   Concept: passwordless one-time codes to a verified email or mobile number.
+   When real auth is connected: remove the prototype notice and demo-account shortcuts
+   (or move them to a separate demo environment), and send real, rate-limited codes. */
+const SESSION_KEY='dayspear-session';
+const AUTH={step:'id', who:null, via:null, err:'', resendAt:0, timer:null, recovered:null};
+const digits=s=>String(s||'').replace(/\D/g,'');
+const maskPhone=p=>{ const d=digits(p); return d.length>=4?`(•••) •••-${d.slice(-4)}`:p; };
+const maskEmail=e=>{ const [u,dm]=String(e).split('@'); return dm?`${u.slice(0,1)}${'•'.repeat(Math.max(2,u.length-1))}@${dm}`:e; };
+function findAccount(v){
+  const raw=v.trim(), d=digits(raw), isEmail=raw.includes('@');
+  const id=Object.keys(PEOPLE).find(i=>{ const p=PEOPLE[i]; if(p.status==='archived') return false;
+    return isEmail ? (p.email||'').toLowerCase()===raw.toLowerCase() : (d.length>=10 && digits(p.phone).slice(-10)===d.slice(-10)); });
+  return id?{id,via:isEmail?'email':'sms'}:null;
+}
+function saveSession(id,keep){ try{ (keep?localStorage:sessionStorage).setItem(SESSION_KEY,JSON.stringify({id})); }catch(e){} }
+function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); }catch(e){} }
+(function restore(){ try{ const s=JSON.parse(localStorage.getItem(SESSION_KEY)||sessionStorage.getItem(SESSION_KEY)||'null'); if(s&&isMgr(s.id)) ME_MGR=s.id; }catch(e){} })();
+
+function demoBtn(id,label){ return `<button type="button" class="demo-acct" data-demo="${id}">${avatar(id)}<span><b>${esc(nameOf(id))}</b><small>${esc(label)}</small></span></button>`; }
+function renderAuth(){
+  clearInterval(AUTH.timer); if(REAL) return realAuth();
+  const a=AUTH; let form='';
+  if(a.step==='id'){
+    form=`<h1 id="authTitle">Welcome back</h1><p class="auth-sub">Sign in with the email or mobile number your manager used to invite you. We’ll send you a one-time code — no password to remember.</p>
+    <form id="authIdForm" novalidate>
+      <div class="field"><label for="auth-id">Email or mobile number</label><input id="auth-id" autocomplete="username" inputmode="email" placeholder="you@example.com or (612) 555-0110" value="${esc(a.lastInput||'')}" aria-describedby="auth-err" ${a.err?'aria-invalid="true"':''}></div>
+      <p class="auth-err" id="auth-err" role="alert">${a.err?esc(a.err):''}</p>
+      <button class="btn btn-primary auth-cta" type="submit">Continue</button>
+    </form>
+    <div class="auth-or"><span>or try a demo account</span></div>
+    <div class="demo-list">${[['mgr'],['mgr2'],['e1']].filter(([i])=>PEOPLE[i]&&PEOPLE[i].status==='active').map(([i])=>demoBtn(i,isMgr(i)?mgrLabel(i):(ROLES[PEOPLE[i].role]||'Employee')+' · '+locNames(PEOPLE[i].locs))).join('')}</div>
+    <p class="auth-foot">New to DaySpear? <a href="#signup">Create a free account</a></p>
+    <p class="auth-foot" style="margin-top:-6px">Invited by your manager? Open the secure link in your invite to set up your account. Links work once and expire after 7 days — ask your manager for a new one if yours has. <a href="#invite">Preview the invite flow</a></p>`;
+  }
+  if(a.step==='code'){
+    const p=PEOPLE[a.who], dest=a.via==='email'?maskEmail(p.email):maskPhone(p.phone);
+    form=`<button type="button" class="auth-back" data-auth="back">${icon('left',14)} Back</button>
+    <h1 id="authTitle">${a.via==='email'?'Check your email':'Check your texts'}</h1>
+    <p class="auth-sub">We sent a 6-digit code to <b>${esc(dest)}</b>. It expires in 10 minutes.</p>
+    <form id="authCodeForm" novalidate>
+      <div class="field"><label for="auth-code">6-digit code</label><input id="auth-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="auth-err auth-hint" ${a.err?'aria-invalid="true"':''}></div>
+      <p class="auth-hint" id="auth-hint">Prototype: any 6 digits will work.</p>
+      <p class="auth-err" id="auth-err" role="alert">${a.err?esc(a.err):''}</p>
+      <label class="auth-keep"><input type="checkbox" id="auth-keep" ${a.keep!==false?'checked':''}><span>Keep me signed in on this device <span class="muted">— turn this off on shared tablets</span></span></label>
+      <button class="btn btn-primary auth-cta" type="submit">Sign in</button>
+    </form>
+    <p class="auth-foot"><span id="auth-resend"></span> · <button type="button" class="linkish" data-auth="recover">Can’t get the code?</button></p>`;
+  }
+  if(a.step==='recover'){
+    const p=PEOPLE[a.who], other=a.via==='email'?'sms':'email', otherOK=(p.verified||{})[other==='email'?'email':'phone']&&(other==='email'?p.email:p.phone);
+    form=`<button type="button" class="auth-back" data-auth="tocode">${icon('left',14)} Back</button>
+    <h1 id="authTitle">Can’t get the code?</h1>
+    <p class="auth-sub">${a.via==='email'?'Check your spam folder, or wait a minute and resend.':'Check you have signal, or wait a minute and resend.'}</p>
+    ${otherOK?`<button type="button" class="demo-acct" data-auth="useother">${icon(other==='email'?'inbox':'phone',20)}<span><b>Send a code to my ${other==='email'?'email':'mobile'} instead</b><small>${esc(other==='email'?maskEmail(p.email):maskPhone(p.phone))} · verified</small></span></button>`:''}
+    <div class="recover-box"><h3>Lost access to ${otherOK?'both':'it'}?</h3>
+      ${isOwner(a.who)
+        ? `<p>Contact DaySpear support. We’ll check that you own the business account before restoring access. For your security, managers can’t change an owner’s sign-in details.</p><a class="btn btn-ghost btn-sm" href="#contact" data-topic="recovery">Contact support</a>`
+        : isMgr(a.who)
+        ? `<p>Ask the business owner to update your email or mobile number and resend your invite. If you can’t reach them, contact support.</p><a class="btn btn-ghost btn-sm" href="#contact" data-topic="recovery">Contact support</a>`
+        : `<p>Ask your manager to update your email or mobile number and send you a new invite link.</p>`}
+    </div>`;
+  }
+  if(a.step==='done'){
+    form=`<div class="auth-done"><div class="spin" aria-hidden="true"></div><h1 id="authTitle">Signing you in…</h1><p class="auth-sub">Hi ${esc(firstOf(a.who))}! Opening ${isMgr(a.who)?'your schedule':'your shifts'}.</p></div>`;
+  }
+  $('#auth').innerHTML=`<aside class="auth-art" aria-hidden="true"><a href="#home" class="auth-logo" tabindex="-1"><img src="${LOGO_WHITE}" alt=""></a>
+      <div class="auth-quote"><h2>Every shift covered. Everyone in the loop.</h2><p>Schedules, time off, swaps and checklists for small teams — on any phone or computer.</p>
+      <div class="auth-mini">${['e2','e1','e3','e5','e8'].map(i=>avatar(i)).join('')}<span>Join your team on DaySpear</span></div></div></aside>
+    <main class="auth-main"><a href="#home" class="auth-logo-sm"><img src="${LOGO}" alt="DaySpear home"></a><div class="auth-card" aria-labelledby="authTitle">${form}</div>
+      <p class="auth-legal">Prototype — no real accounts, codes or messages. <a href="#home">Back to homepage</a></p></main>`;
+  if(a.step==='code') tickResend();
+  const f=$('#auth input:not([type=checkbox])'); if(f) setTimeout(()=>f.focus(),30);
+}
+function tickResend(){
+  const upd=()=>{ const el=$('#auth-resend'); if(!el){ clearInterval(AUTH.timer); return; } const s=Math.ceil((AUTH.resendAt-Date.now())/1000);
+    el.innerHTML = s>0 ? `Resend code in ${s}s` : `<button type="button" class="linkish" data-auth="resend">Resend code</button>`; if(s<=0) clearInterval(AUTH.timer); };
+  upd(); AUTH.timer=setInterval(upd,1000);
+}
+function startCode(id,via){ Object.assign(AUTH,{step:'code',who:id,via,err:'',resendAt:Date.now()+30000}); renderAuth(); }
+function finishLogin(id,keep){
+  AUTH.step='done'; AUTH.who=id; renderAuth(); saveSession(id,keep);
+  setTimeout(()=>{ AUTH.step='id'; AUTH.err=''; AUTH.lastInput='';
+    const rec=AUTH.recovered; AUTH.recovered=null;
+    if(isMgr(id)){ ME_MGR=id; UI.loc=isOwner(id)?'all':(PEOPLE[id].manages[0]||'all'); UI.channel='ann'; location.hash='#app/schedule';
+      if(rec) setTimeout(()=>{ openProfile(id); toast(`Signed in with your ${rec==='phone'?'email':'mobile'}. Update your ${rec==='phone'?'mobile number':'email'} here so you can use it again.`); },400); }
+    else { UI.emp={tab:rec?'profile':'home',thread:null}; location.hash='#app/employee'; if(id!==ME) setTimeout(()=>toast(`In this prototype the employee view shows Maya’s account.`),300); else if(rec) setTimeout(()=>toast(`Signed in with your ${rec==='phone'?'email':'mobile'}. Update your ${rec==='phone'?'mobile number':'email'} below.`),300); }
+  },700);
+}
+document.addEventListener('submit',e=>{
+  const f=e.target;
+  if(f.id==='authIdForm'){ e.preventDefault(); const v=$('#auth-id').value; AUTH.lastInput=v;
+    if(!v.trim()){ AUTH.err='Enter your email or mobile number.'; return renderAuth(); }
+    if(!v.includes('@')&&digits(v).length<10){ AUTH.err='That doesn’t look like a full email or mobile number.'; return renderAuth(); }
+    const acc=findAccount(v);
+    if(!acc){ AUTH.err='We couldn’t find an account with that. Check for typos, or ask your manager to send you an invite.'; return renderAuth(); }
+    AUTH.recovered=null; startCode(acc.id,acc.via); return; }
+  if(f.id==='authCodeForm'){ e.preventDefault(); const c=digits($('#auth-code').value); AUTH.keep=$('#auth-keep').checked;
+    if(c.length!==6){ AUTH.err='Enter the 6-digit code we sent you.'; const keep=AUTH.keep; renderAuth(); return; }
+    finishLogin(AUTH.who,AUTH.keep); return; }
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-demo],[data-auth]'); if(!t||!t.closest('#auth')) return;
+  if(t.dataset.demo){ const p=PEOPLE[t.dataset.demo]; AUTH.lastInput=p.email; AUTH.recovered=null; startCode(t.dataset.demo,'email'); return; }
+  const act=t.dataset.auth;
+  if(act==='back'){ AUTH.step='id'; AUTH.err=''; renderAuth(); }
+  if(act==='resend'){ AUTH.resendAt=Date.now()+30000; AUTH.err=''; renderAuth(); toast('New code sent (prototype)'); }
+  if(act==='recover'){ AUTH.step='recover'; renderAuth(); }
+  if(act==='tocode'){ AUTH.step='code'; renderAuth(); }
+  if(act==='useother'){ const from=AUTH.via; AUTH.via=from==='email'?'sms':'email'; AUTH.recovered=from==='sms'?'phone':'email'; AUTH.step='code'; AUTH.resendAt=Date.now()+30000; AUTH.err=''; renderAuth(); toast(AUTH.via==='sms'?'Code sent by text (prototype)':'Code sent by email (prototype)'); }
+});
+document.addEventListener('input',e=>{ if(e.target.id==='auth-code'){ const v=digits(e.target.value).slice(0,6); e.target.value=v; if(v.length===6&&!AUTH.submitted){ /* auto-submit */ AUTH.keep=$('#auth-keep').checked; finishLogin(AUTH.who,AUTH.keep); } } });
+
+/* ======================= INVITE ACCEPTANCE (secure, single-use, expiring link) ======================= */
+const INV={step:'welcome', err:'', who:null};
+function inviteTarget(){ return Object.keys(PEOPLE).find(i=>PEOPLE[i].status==='invited'); }
+function renderInvite(expired){
+  clearInterval(AUTH.timer); if(REAL) return realInvite(expired);
+  const id=INV.who||inviteTarget(); INV.who=id; const p=id&&PEOPLE[id]; let form='';
+  if(expired||!p){
+    form=`<h1 id="authTitle">This invite link has expired</h1><p class="auth-sub">For your security, invite links work once and expire after 7 days. Ask your manager to send you a new one — it only takes them a moment.</p>
+      <a class="btn btn-primary auth-cta" href="#login">Go to sign in</a><p class="auth-foot">Already set up? Sign in with your email or mobile number.</p>`;
+  } else if(INV.step==='welcome'){
+    const by=p.invitedBy&&PEOPLE[p.invitedBy]?firstOf(p.invitedBy):'Your manager';
+    const contact=p.phone||p.email, via=p.phone?'sms':'email';
+    form=`<span class="pill pill-green nodot" style="justify-self:start">${icon('check',12)} Secure invite · expires in ${p.inviteExpires??7} days</span>
+      <h1 id="authTitle">Join ${esc(D.settings.business.name)}</h1>
+      <p class="auth-sub">${esc(by)} invited you to work as <b>${esc(ROLES[p.role]||'team member')}</b> at <b>${esc(locNames(p.locs))}</b>. Set up your account in two quick steps.</p>
+      <form id="invForm" novalidate>
+        <div class="field"><label for="inv-name">Your name</label><input id="inv-name" value="${esc(p.name)}" autocomplete="name"><span class="muted" style="font-size:12px">This is how your team will see you.</span></div>
+        <div class="field"><label for="inv-contact">${via==='sms'?'Mobile number':'Email'}</label><input id="inv-contact" value="${esc(contact)}" ${via==='sms'?'type="tel" autocomplete="tel"':'type="email" autocomplete="email"'}><span class="muted" style="font-size:12px">We’ll send a code to confirm it’s you. You’ll use this to sign in.</span></div>
+        <p class="auth-err" role="alert">${INV.err?esc(INV.err):''}</p>
+        <button class="btn btn-primary auth-cta" type="submit">Send my code</button>
+      </form>
+      <p class="auth-foot">Not you, or don’t work here? Just ignore this invite.</p>`;
+  } else if(INV.step==='code'){
+    form=`<button type="button" class="auth-back" data-inv="back">${icon('left',14)} Back</button>
+      <h1 id="authTitle">Enter your code</h1><p class="auth-sub">We sent a 6-digit code to <b>${esc(p.phone?maskPhone(p.phone):maskEmail(p.email))}</b>.</p>
+      <form id="invCodeForm" novalidate><div class="field"><label for="inv-code">6-digit code</label><input id="inv-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div>
+      <p class="auth-hint">Prototype: any 6 digits will work.</p><p class="auth-err" role="alert">${INV.err?esc(INV.err):''}</p>
+      <button class="btn btn-primary auth-cta" type="submit">Confirm and join</button></form>`;
+  } else {
+    form=`<div class="auth-done" style="padding:10px 0"><div class="ok-badge">${icon('check',26)}</div><h1 id="authTitle">You’re in, ${esc(p.first)}!</h1>
+      <p class="auth-sub">Your account is set up. Your manager has been told you joined. Next time, sign in with your ${p.phone?'mobile number':'email'}.</p>
+      <p class="auth-hint">Tip: add DaySpear to your home screen so it opens like an app. On iPhone, notifications work after you do.</p>
+      <button type="button" class="btn btn-primary auth-cta" data-inv="open">See my shifts</button></div>`;
+  }
+  $('#auth').innerHTML=`<aside class="auth-art" aria-hidden="true"><a href="#home" class="auth-logo" tabindex="-1"><img src="${LOGO_WHITE}" alt=""></a>
+      <div class="auth-quote"><h2>Your shifts, your team, one place.</h2><p>See your schedule, swap shifts, request time off and chat with your team — from any phone.</p></div></aside>
+    <main class="auth-main"><a href="#home" class="auth-logo-sm"><img src="${LOGO}" alt="DaySpear home"></a><div class="auth-card" aria-labelledby="authTitle">${form}</div>
+      <p class="auth-legal">Prototype — no real accounts, codes or messages. <a href="#invite/expired">See an expired link</a> · <a href="#home">Homepage</a></p></main>`;
+  const f=$('#auth input'); if(f) setTimeout(()=>f.focus(),30);
+}
+document.addEventListener('submit',e=>{
+  const f=e.target;
+  if(f.id==='invForm'){ e.preventDefault(); const p=PEOPLE[INV.who]; const n=$('#inv-name').value.trim(), c=$('#inv-contact').value.trim();
+    if(!n){ INV.err='Please add your name.'; return renderInvite(); }
+    if(p.phone?digits(c).length<10:!/^\S+@\S+\.\S+$/.test(c)){ INV.err=p.phone?'Enter a full mobile number.':'Enter a valid email.'; return renderInvite(); }
+    p.name=n; p.first=n.split(' ')[0]; if(p.phone) p.phone=c; else p.email=c; INV.err=''; INV.step='code'; renderInvite(); return; }
+  if(f.id==='invCodeForm'){ e.preventDefault(); if(digits($('#inv-code').value).length!==6){ INV.err='Enter the 6-digit code we sent you.'; return renderInvite(); }
+    const p=PEOPLE[INV.who]; p.status='active'; delete p.invited; delete p.inviteExpires; p.verified=Object.assign({email:false,phone:false},p.verified,{[p.phone?'phone':'email']:true});
+    saveSession(INV.who,true); save(); syncRefs(); INV.err=''; INV.step='done'; renderInvite(); return; }
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-inv]'); if(!t) return;
+  if(t.dataset.inv==='back'){ INV.step='welcome'; INV.err=''; renderInvite(); }
+  if(t.dataset.inv==='open'){ const id=INV.who; INV.step='welcome'; INV.who=null; UI.emp={tab:'home',thread:null}; location.hash='#app/employee'; if(id!==ME) setTimeout(()=>toast(`${esc(firstOf(id))} now counts as an active member. In this prototype the employee view shows Maya’s account.`),300); }
+});

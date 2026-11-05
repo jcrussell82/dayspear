@@ -1,0 +1,124 @@
+
+/* ======================= SIGN UP (new business) — prototype, no real accounts ======================= */
+const BIZ_TYPES={cafe:['Café or bakery',['Barista','Shift lead','Front counter','Bakery']],restaurant:['Restaurant or bar',['Server','Host','Line cook','Shift lead']],retail:['Retail shop',['Sales associate','Cashier','Stockroom','Shift lead']],clinic:['Clinic or practice',['Front desk','Medical assistant','Nurse','Manager on duty']],salon:['Salon or spa',['Stylist','Front desk','Assistant']],gym:['Gym or studio',['Front desk','Trainer','Instructor']],other:['Something else',['Team member','Shift lead']]};
+const SU={step:'you', err:'', d:{name:'',email:'',phone:'',biz:'',type:'cafe',locs:[{name:'',address:''}],roles:null,invites:[{name:'',contact:''},{name:'',contact:''}],templates:true}};
+const SU_STEPS=['you','code','business','team'];
+function suProgress(){ const i=SU_STEPS.indexOf(SU.step); if(i<0) return ''; const labels=['You','Verify','Business','Team']; return `<ol class="su-steps" aria-label="Sign-up progress">${labels.map((l,k)=>`<li class="${k<i?'done':k===i?'on':''}" ${k===i?'aria-current="step"':''}><span>${k<i?'✓':k+1}</span>${l}</li>`).join('')}</ol>`; }
+function renderSignup(){
+  clearInterval(AUTH.timer);
+  const d=SU.d, err=SU.err?`<p class="auth-err" role="alert">${SU.err}</p>`:''; let form='';
+  if(SU.step==='you'){
+    form=`<h1 id="authTitle">Start free</h1><p class="auth-sub">Free for up to 10 people, with every location included. No card needed.</p>
+    <form id="suYou" novalidate>
+      <div class="field"><label for="su-name">Your name</label><input id="su-name" autocomplete="name" value="${esc(d.name)}"></div>
+      <div class="field"><label for="su-email">Work email</label><input id="su-email" type="email" autocomplete="email" value="${esc(d.email)}"><span class="muted" style="font-size:12px">You’ll sign in with this. As the owner, it’s also how you recover your account.</span></div>
+      <div class="field"><label for="su-phone">Mobile number <span class="muted" style="font-weight:400">(optional)</span></label><input id="su-phone" type="tel" autocomplete="tel" value="${esc(d.phone)}"><span class="muted" style="font-size:12px">Lets you sign in by text, too.</span></div>
+      ${err}<button class="btn btn-primary auth-cta" type="submit">Continue</button>
+      <p class="auth-hint">By continuing you agree to the Terms and Privacy Policy (prototype — not written yet).</p>
+    </form><p class="auth-foot">Already use DaySpear? <a href="#login">Sign in</a></p>`;
+  }
+  if(SU.step==='code'){
+    form=`<button type="button" class="auth-back" data-su="back">${icon('left',14)} Back</button><h1 id="authTitle">Confirm your email</h1>
+    <p class="auth-sub">We sent a 6-digit code to <b>${esc(d.email)}</b>.</p>
+    <form id="suCode" novalidate><div class="field"><label for="su-code">6-digit code</label><input id="su-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div>
+    <p class="auth-hint">Prototype: any 6 digits will work.</p>${err}<button class="btn btn-primary auth-cta" type="submit">Confirm</button></form>
+    <p class="auth-foot">Wrong email? <button type="button" class="linkish" data-su="back">Change it</button></p>`;
+  }
+  if(SU.step==='business'){
+    form=`<button type="button" class="auth-back" data-su="back">${icon('left',14)} Back</button><h1 id="authTitle">About your business</h1>
+    <form id="suBiz" novalidate>
+      <div class="field"><label for="su-biz">Business name</label><input id="su-biz" autocomplete="organization" value="${esc(d.biz)}" placeholder="e.g. Corner Coffee"></div>
+      <div class="field"><label for="su-type">What kind of business?</label><select id="su-type">${Object.entries(BIZ_TYPES).map(([k,[l]])=>`<option value="${k}" ${d.type===k?'selected':''}>${l}</option>`).join('')}</select><span class="muted" style="font-size:12px">We’ll suggest roles to start with. You can change them anytime.</span></div>
+      <div class="field"><span class="lbl">Locations</span>
+        ${d.locs.map((L,i)=>`<div class="su-loc"><input data-suloc="${i}|name" value="${esc(L.name)}" placeholder="${i===0?'Location name, e.g. Main Street':'Another location'}" aria-label="Location ${i+1} name"><input data-suloc="${i}|address" value="${esc(L.address)}" placeholder="Address (optional)" aria-label="Location ${i+1} address">${i>0?`<button type="button" class="icon-btn" data-su="rmloc" data-i="${i}" aria-label="Remove location">${icon('x',14)}</button>`:(d.locs.length>1?'<span class="su-spacer" aria-hidden="true"></span>':'')}</div>`).join('')}
+        ${d.locs.length<6?`<button type="button" class="btn btn-ghost btn-xs" data-su="addloc" style="justify-self:start">${icon('plus',12)} Add another location</button>`:''}
+        <span class="muted" style="font-size:12px">Every plan includes unlimited locations. You can add more later.</span></div>
+      ${err}<button class="btn btn-primary auth-cta" type="submit">Continue</button></form>`;
+  }
+  if(SU.step==='team'){
+    const roles=d.roles||BIZ_TYPES[d.type][1].slice(); d.roles=roles;
+    form=`<button type="button" class="auth-back" data-su="back">${icon('left',14)} Back</button><h1 id="authTitle">Set up your team</h1>
+    <form id="suTeam" novalidate>
+      <div class="field"><span class="lbl">Roles people work as</span><div class="chips">${roles.map((r,i)=>`<span class="chip on-chip">${esc(r)}<button type="button" data-su="rmrole" data-i="${i}" aria-label="Remove ${esc(r)}">${icon('x',11)}</button></span>`).join('')}</div>
+        <div class="su-loc" style="grid-template-columns:1fr auto"><input id="su-role" placeholder="Add a role, e.g. Dishwasher" aria-label="New role"><button type="button" class="btn btn-ghost btn-xs" data-su="addrole">Add</button></div></div>
+      <div class="field"><span class="lbl">Invite your team <span class="muted" style="font-weight:400">(optional — you can do this later)</span></span>
+        ${d.invites.map((v,i)=>`<div class="su-loc"><input data-suinv="${i}|name" value="${esc(v.name)}" placeholder="Name" aria-label="Teammate ${i+1} name"><input data-suinv="${i}|contact" value="${esc(v.contact)}" placeholder="Mobile or email" aria-label="Teammate ${i+1} mobile or email"></div>`).join('')}
+        ${d.invites.length<8?`<button type="button" class="btn btn-ghost btn-xs" data-su="addinv" style="justify-self:start">${icon('plus',12)} Add another person</button>`:''}
+        <span class="muted" style="font-size:12px">They’ll get a secure link that expires in 7 days. People count toward your plan only after they accept.</span></div>
+      <label class="auth-keep"><input type="checkbox" id="su-tpl" ${d.templates?'checked':''}><span>Start with opening and closing checklists for each location</span></label>
+      ${err}<button class="btn btn-primary auth-cta" type="submit">Create my workspace</button></form>`;
+  }
+  if(SU.step==='done'){
+    const n=d.invites.filter(v=>v.name.trim()&&v.contact.trim()).length, ls=d.locs.filter(L=>L.name.trim());
+    form=`<div class="auth-done" style="padding:0;justify-items:start;text-align:left"><div class="ok-badge">${icon('check',26)}</div>
+      <h1 id="authTitle">${esc(d.biz)} is ready</h1>
+      <ul class="su-sum"><li>${ls.length} location${ls.length>1?'s':''}: ${esc(listNames(ls.map(L=>L.name.trim())))}</li><li>${d.roles.length} roles: ${esc(d.roles.join(', '))}</li><li>${n?`${n} invite${n>1?'s':''} sent — they’ll appear as “Invited” until they accept`:'No invites yet — you can invite people from Settings › Team & roles'}</li><li>Free plan · ${1} of ${PRICING.plans[0].limit} active people (you)</li></ul>
+      <div class="alert amber" style="width:100%">ℹ<div>Prototype: this replaces the sample bakery in this browser. Bring it back anytime in Settings › Your preferences › Reset sample data.</div></div>
+      <button type="button" class="btn btn-primary auth-cta" data-su="go">Build my first week</button></div>`;
+  }
+  $('#auth').innerHTML=`<aside class="auth-art" aria-hidden="true"><a href="#home" class="auth-logo" tabindex="-1"><img src="${LOGO_WHITE}" alt=""></a>
+      <div class="auth-quote"><h2>Your first schedule in minutes.</h2><p>Add your locations and roles, invite your team, and publish the week. Free for up to 10 people.</p>
+      <ul class="auth-ticks"><li>No card needed</li><li>Every location included</li><li>Your team joins from a link</li></ul></div></aside>
+    <main class="auth-main"><a href="#home" class="auth-logo-sm"><img src="${LOGO}" alt="DaySpear home"></a><div class="auth-card" aria-labelledby="authTitle">${suProgress()}${form}</div>
+      <p class="auth-legal">Prototype — no real accounts, codes or messages. <a href="#home">Back to homepage</a></p></main>`;
+  const f=$('#auth .auth-card input:not([type=checkbox])'); if(f&&SU.step!=='done') setTimeout(()=>f.focus(),30);
+}
+function suGo(step){ SU.step=step; SU.err=''; renderSignup(); window.scrollTo(0,0); }
+function suFail(msg){ SU.err=msg; renderSignup(); }
+const suSync=()=>{ $$('[data-suloc]').forEach(x=>{ const [i,k]=x.dataset.suloc.split('|'); SU.d.locs[+i][k]=x.value; }); $$('[data-suinv]').forEach(x=>{ const [i,k]=x.dataset.suinv.split('|'); SU.d.invites[+i][k]=x.value; }); const t=$('#su-tpl'); if(t) SU.d.templates=t.checked; const b=$('#su-biz'); if(b) SU.d.biz=b.value; const ty=$('#su-type'); if(ty){ if(ty.value!==SU.d.type) SU.d.roles=null; SU.d.type=ty.value; } };
+function mkPerson(o){
+  return Object.assign({access:'employee',manages:[],status:'active',role:'',roles:[],locs:[],phone:'',email:'',photo:'',
+    avail:Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,{t:'any',s:'06:00',e:'18:00'}])),prefHours:[0,40],prefShifts:[],
+    notif:{channels:{push:true,email:true,sms:false},events:{schedule:true,openShifts:true,requests:true,messages:true,announcements:true}},
+    birthday:null,bdayOptIn:false,sharePhone:false,theme:'system',verified:{email:false,phone:false}},o);
+}
+function createWorkspace(){
+  const d=SU.d, base=seed();
+  const locs={}; d.locs.filter(L=>L.name.trim()).forEach((L,i)=>{ const nm=L.name.trim(); locs['l'+(i+1)]={name:nm,short:nm.replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'L'+(i+1),address:L.address.trim(),hours:''}; });
+  const lk=Object.keys(locs); const roles={}; d.roles.forEach((r,i)=>roles['r'+(i+1)]=r); const rk=Object.keys(roles);
+  const people={mgr:mkPerson({id:'mgr',name:d.name.trim(),first:d.name.trim().split(' ')[0],access:'owner',manages:lk.slice(),locs:lk.slice(),role:rk[0],roles:[rk[0]],email:d.email.trim(),phone:d.phone.trim(),verified:{email:true,phone:false},prefHours:[30,45]})};
+  people.mgr.notif.follow=lk.slice();
+  const order=[];
+  d.invites.filter(v=>v.name.trim()&&v.contact.trim()).forEach((v,i)=>{ const id='p'+(i+1), c=v.contact.trim(), nm=v.name.trim();
+    people[id]=mkPerson({id,name:nm,first:nm.split(' ')[0],status:'invited',invited:'Sent just now',inviteExpires:7,invitedBy:'mgr',role:rk[0],roles:[rk[0]],locs:[lk[0]],email:c.includes('@')?c:'',phone:c.includes('@')?'':c}); order.push(id); });
+  const checklists=d.templates?lk.flatMap(l=>[
+    {id:'cl-open-'+l,name:'Opening duties',loc:l,assign:{type:'shift',label:'Attach to opening shifts'},items:['Unlock and turn on lights','Count the cash drawer','Check supplies and restock','Open the doors on time'].map(t=>({t,done:false}))},
+    {id:'cl-close-'+l,name:'Closing duties',loc:l,assign:{type:'shift',label:'Attach to closing shifts'},items:['Clean and tidy work areas','Count the drawer and log the deposit','Take out trash','Lights off, lock up and set the alarm'].map(t=>({t,done:false}))}]):[];
+  const messages={'team-all':[]}; lk.forEach(l=>messages['team-'+l]=[]);
+  const settings=base.settings; settings.business={name:d.biz.trim(),type:BIZ_TYPES[d.type][0]};
+  D={v:5,billing:{plan:'Free',card:null},published:{},people,order,locs,roles,settings,shifts:[],timeoff:[],coverLog:[],checklists,tasks:[],
+    announcements:[{id:nid('a'),title:`Welcome to ${d.biz.trim()} on DaySpear`,text:'This is where announcements show up. Your team will see the schedule here once it’s published.',from:'mgr',loc:null,when:nowStamp(),pinned:true,seen:[]}],
+    messages,unread:{},empAnnRead:false,deleted:{}};
+  save(); syncRefs(); ME_MGR='mgr'; UI.loc='all'; UI.week=1; UI.channel='ann'; UI.set='business'; UI.taskTab='todos'; UI.openCl={};
+  saveSession('mgr',true);
+}
+document.addEventListener('submit',e=>{
+  const f=e.target, d=SU.d;
+  if(f.id==='suYou'){ e.preventDefault(); d.name=$('#su-name').value.trim(); d.email=$('#su-email').value.trim(); d.phone=$('#su-phone').value.trim();
+    if(!d.name) return suFail('Please add your name.');
+    if(!/^\S+@\S+\.\S+$/.test(d.email)) return suFail('Enter a valid email address — you’ll use it to sign in and recover your account.');
+    if(d.phone&&digits(d.phone).length<10) return suFail('That mobile number looks too short. Leave it blank if you’d rather add it later.');
+    if(REAL) return realSignupStart();
+    if(findAccount(d.email)) return suFail('There’s already an account with this email. <a href="#login">Sign in instead</a>.');
+    suGo('code'); return; }
+  if(f.id==='suCode'){ e.preventDefault(); if(digits($('#su-code').value).length!==6) return suFail('Enter the 6-digit code we sent you.'); if(REAL) return realSignupVerify(); suGo('business'); return; }
+  if(f.id==='suBiz'){ e.preventDefault(); suSync(); if(!d.biz.trim()) return suFail('Please add your business name.'); if(!d.locs[0].name.trim()) return suFail('Name at least one location — it can be as simple as “Main”.');
+    const names=d.locs.map(L=>L.name.trim().toLowerCase()).filter(Boolean); if(new Set(names).size!==names.length) return suFail('Each location needs a different name.'); suGo('team'); return; }
+  if(f.id==='suTeam'){ e.preventDefault(); suSync(); if(!d.roles.length) return suFail('Add at least one role.');
+    const bad=d.invites.find(v=>(v.name.trim()&&!v.contact.trim())||(!v.name.trim()&&v.contact.trim())); if(bad) return suFail('Each invite needs both a name and a mobile number or email.');
+    const badC=d.invites.find(v=>v.contact.trim()&&!(v.contact.includes('@')?/^\S+@\S+\.\S+$/.test(v.contact.trim()):digits(v.contact).length>=10)); if(badC) return suFail(`Check the contact for ${esc(badC.name||'that person')} — use a full mobile number or email.`);
+    if(d.invites.filter(v=>v.name.trim()).length+1>PRICING.plans[0].limit) return suFail('That’s more than the free plan’s 10 people. Invite the rest later, or contact us about a bigger plan.');
+    if(REAL) return realCreateWorkspace();
+    createWorkspace(); suGo('done'); return; }
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-su]'); if(!t||!t.closest('#auth')) return; const a=t.dataset.su, d=SU.d; suSync();
+  if(a==='back'){ suGo(SU_STEPS[Math.max(0,SU_STEPS.indexOf(SU.step)-1)]); }
+  if(a==='addloc'){ d.locs.push({name:'',address:''}); renderSignup(); const ins=$$('[data-suloc$="|name"]'); ins[ins.length-1].focus(); }
+  if(a==='rmloc'){ d.locs.splice(+t.dataset.i,1); renderSignup(); }
+  if(a==='addinv'){ d.invites.push({name:'',contact:''}); renderSignup(); const ins=$$('[data-suinv$="|name"]'); ins[ins.length-1].focus(); }
+  if(a==='addrole'){ const v=$('#su-role').value.trim(); if(v&&!d.roles.includes(v)) d.roles.push(v); renderSignup(); $('#su-role').focus(); }
+  if(a==='rmrole'){ d.roles.splice(+t.dataset.i,1); renderSignup(); }
+  if(a==='go'){ SU.step='you'; SU.d.locs=[{name:'',address:''}]; location.hash='#app/schedule'; setTimeout(()=>toast(`Welcome to DaySpear, ${esc(firstOf(ME_MGR))}! Click an empty slot to add your first shift.`),300); }
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='su-role'){ e.preventDefault(); const b=$('[data-su="addrole"]'); b&&b.click(); } });

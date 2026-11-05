@@ -1,0 +1,120 @@
+
+/* ======================= RENDER & ROUTER ======================= */
+function render(){
+  if(!document.body.classList.contains('in-app')) return;
+  applyTheme(); renderTopbar(); renderBillBanner();
+  ['schedule','requests','messages','tasks','employee','settings'].forEach(v=>{ $('#v-'+v).hidden = v!==UI.view; });
+  ({schedule:renderSchedule,requests:renderRequests,messages:renderMessages,tasks:renderTasks,employee:renderEmployee,settings:renderSettings})[UI.view]();
+  
+  $('#mayaPreview').style.display=(!REAL&&PEOPLE[ME]&&PEOPLE[ME].status==='active')?'':'none'; $('#previewLabel').style.display=(!REAL&&((PEOPLE[ME]&&PEOPLE[ME].status==='active')||mgrIds().length>1))?'':'none'; $('#bizLogo').textContent=(D.settings.business.name||'?').trim()[0].toUpperCase(); $('#actAs').innerHTML=REAL?'':mgrIds().filter(i=>i!==ME_MGR).map(i=>`<button class="nav-item" data-actas="${i}">${avatar(i,'sm')}<span class="act-txt">${esc(firstOf(i))} · ${isOwner(i)?'Owner':esc(locNames(PEOPLE[i].manages))}<small>${isOwner(i)?'':'Manager'}</small></span></button>`).join(''); $('#bizName').textContent=D.settings.business.name; { const n=Object.keys(LOCS).length; $('#bizSub').innerHTML=`<span class="bz-type">${esc(D.settings.business.type)}</span><span class="bz-n">${n}&nbsp;location${n===1?'':'s'}</span>`; $('#bizSub').title=`${D.settings.business.type} · ${n} location${n===1?'':'s'}`; }
+  $$('[data-go]').forEach(b=>b.classList.toggle(b.classList.contains('nav-item')?'active':'on', b.dataset.go===UI.view));
+  const rq=pendingTO().filter(t=>canDecideTO(t)&&toLocs(t).some(follows)).length+needsCover().filter(s=>canManage(s.loc)&&follows(s.loc)&&(s.cover.status==='offered'||!s.emp)).length;
+  $('#navReqCount').textContent=rq||''; $('#navReqCount').style.display=rq?'':'none';
+  const mu=Object.values(D.unread).reduce((a,b)=>a+(b||0),0);
+  $('#navMsgCount').textContent=mu||''; $('#navMsgCount').style.display=mu?'':'none';
+  document.title = `${TITLES[UI.view]} · DaySpear${REAL?'':' demo'}`;
+}
+function go(v){ if(location.hash==='#app/'+v){ UI.view=v; render(); } else location.hash='#app/'+v; }
+const PAGES={home:'Home',product:'Product','how-it-works':'How it works',pricing:'Pricing',faq:'FAQ',contact:'Contact'};
+function route(){
+  if(REAL&&!realGuard()) return;
+  const h=location.hash;
+  const auth=h==='#login'||h==='#signup'||h.startsWith('#invite'); document.body.classList.toggle('in-auth',auth);
+  if(auth){ document.body.classList.remove('in-app','emp-mode'); if($('#scrim').classList.contains('open')) closeModal(); if(h==='#signup'){ if(SU.step==='done') SU.step='you'; renderSignup(); document.title='Start free · DaySpear'; } else if(h.startsWith('#invite')){ if(!INV.who) INV.step='welcome'; renderInvite(h==='#invite/expired'); document.title='Join your team · DaySpear'; } else { AUTH.step='id'; AUTH.err=''; renderAuth(); document.title='Sign in · DaySpear'; } window.scrollTo(0,0); return; }
+  if(h.startsWith('#app')){
+    const v=h.split('/')[1]; UI.view=TITLES[v]?v:'schedule';
+    document.body.classList.add('in-app'); document.body.classList.toggle('emp-mode',UI.view==='employee');
+    closeSheet(); render(); const vw=$('#v-'+UI.view); if(vw) vw.scrollTop=0;
+  } else {
+    document.body.classList.remove('in-app','emp-mode'); if($('#scrim').classList.contains('open')) closeModal();
+    const pg=PAGES[h.slice(1)]?h.slice(1):'home';
+    $$('.page').forEach(el=>el.hidden=el.dataset.page!==pg);
+    $$('[data-nav]').forEach(a=>{ a.classList.toggle('active',a.dataset.nav===pg); if(a.dataset.nav===pg) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
+    document.title = pg==='home'?'DaySpear — Team scheduling, made simple':`${PAGES[pg]} · DaySpear`;
+    if(pg==='contact'&&UI.topic&&$('#c-topic')){ $('#c-topic').value=UI.topic; if(UI.topic==='large') $('#c-size').value='More than 75'; UI.topic=null; }
+    window.scrollTo(0,0);
+  }
+}
+window.addEventListener('hashchange',route);
+
+/* ======================= EVENTS (delegated) ======================= */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button,[data-go],a'); if(!t) return;
+  const ds=t.dataset;
+  if(ds.go){ e.preventDefault(); go(ds.go); return; }
+  if(ds.loc){ UI.loc=ds.loc; render(); return; }
+  if(ds.week){ UI.week+=+ds.week; render(); return; }
+  if(ds.weekGo){ UI.week=+ds.weekGo; render(); return; }
+  if(t.id==='publishBtn'){ publish(); return; }
+  if(t.id==='copyWeek'){ copyWeek(); return; }
+  if(ds.shift){ openShiftModal(ds.shift); return; }
+  if(ds.addcell!==undefined){ const [emp,d]=ds.addcell.split('|'); openShiftModal(null,{emp:emp||null,d:+d}); return; }
+  if(ds.to){ openTOModal(ds.to); return; }
+  if(ds.goreq){ UI.reqTab=ds.goreq; go('requests'); return; }
+  if(ds.reqtab){ UI.reqTab=ds.reqtab; render(); return; }
+  if(ds.approve){ approveTO(ds.approve, !!ds.open); if($('#scrim').classList.contains('open')) closeModal(); return; }
+  if(ds.decline){ const r=D.timeoff.find(x=>x.id===ds.decline); if(r.status!=='pending'){ render(); return; } r.status='declined'; r.decidedBy=ME_MGR; r.decidedAt=nowStamp(); if($('#scrim').classList.contains('open')) closeModal(); commit(); toast(`Declined · ${esc(firstOf(r.emp))} was notified`,()=>{r.status='pending'; delete r.decidedBy; delete r.decidedAt; commit();}); return; }
+  if(ds.viewweek){ if($('#scrim').classList.contains('open')) closeModal(); UI.week=+ds.viewweek; go('schedule'); return; }
+  if(ds.assign){ const sel=$(`[data-assignsel="${ds.assign}"]`); assignCover(ds.assign, sel.value); return; }
+  if(ds.approveoffer){ const s=shiftById(ds.approveoffer); assignCover(s.id, s.cover.offerBy); return; }
+  if(ds.declineoffer){ const s=shiftById(ds.declineoffer); const by=s.cover.offerBy; s.cover.status='needed'; delete s.cover.offerBy; commit(); toast(`Declined ${esc(firstOf(by))}’s offer · shift still needs coverage`); return; }
+  if(ds.cancelcover){ const s=shiftById(ds.cancelcover); delete s.cover; commit(); toast(`Coverage request cancelled · ${esc(firstOf(s.emp))} keeps the shift`); return; }
+  if(ds.thread){ UI.channel='sh-'+ds.thread; go('messages'); return; }
+  if(ds.ch){ UI.channel=ds.ch; render(); return; }
+  if(ds.editshift){ openShiftModal(ds.editshift); return; }
+  if(ds.cl){ UI.openCl[ds.cl]=!UI.openCl[ds.cl]; render(); return; }
+  if(ds.tv){ UI.taskView=ds.tv; render(); return; }
+  if(ds.tasktab){ UI.taskTab=ds.tasktab; render(); return; }
+  if(t.id==='addTaskTop'){ openTaskModal(); return; }
+  if(t.id==='addChecklist'){ openChecklistModal(); return; }
+  if(ds.taskmove){ const [id,dir]=ds.taskmove.split('|'); const k=D.tasks.find(x=>x.id===id); const o=['todo','doing','done']; k.status=o[o.indexOf(k.status)+(+dir)]; commit(); return; }
+  if(ds.actas){ ME_MGR=ds.actas; UI.loc=isOwner(ME_MGR)?'all':(PEOPLE[ME_MGR].manages[0]||'all'); UI.channel='ann'; render(); toast(`Now signed in as ${esc(nameOf(ME_MGR))} · ${esc(mgrLabel(ME_MGR))}`); return; }
+  if(t.id==='resetDemo'){ if(confirm('Reset all sample data in this preview?')){ D=seed(); syncRefs(); ME_MGR='mgr'; UI.loc='all'; UI.week=1; UI.channel='ann'; UI.emp={tab:'home',thread:null}; commit(); toast('Sample data reset'); } return; }
+  // employee
+  if(ds.etab){ UI.emp.tab=ds.etab; UI.emp.thread=null; render(); $('#pbody')&&($('#pbody').scrollTop=0); return; }
+  if(ds.ethread){ UI.emp.tab='chat'; UI.emp.thread=ds.ethread; render(); return; }
+  if(ds.eback!==undefined){ UI.emp.thread=null; render(); return; }
+  if(ds.eread){ const a=D.announcements.find(x=>x.id===ds.eread); if(!a.seen.includes(ME)) a.seen.push(ME); commit(); return; }
+  if(ds.eoffer){ const s=shiftById(ds.eoffer); const k='sh-'+s.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:'I can take this one!',when:nowStamp()});
+    if(D.settings.requests.autoApprove){ D.coverLog.push({id:nid('c'),shiftId:s.id,from:s.cover.from||s.emp,to:ME,when:nowStamp(),by:'auto'}); s.emp=ME; delete s.cover; commit(); toast('It’s yours — auto-approved and added to your schedule'); }
+    else { s.cover.status='offered'; s.cover.offerBy=ME; commit(); toast(`Offer sent · ${esc(mgrNames([s.loc]))} will approve it`); } return; }
+  if(ds.esheet){ const [k,a]=ds.esheet.split('|'); openSheet(k,a); return; }
+  if(ds.eclose!==undefined){ closeSheet(); return; }
+});
+document.addEventListener('click',e=>{ if(e.target.id==='esheet') closeSheet(); });
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.clitem){ const [id,i]=t.dataset.clitem.split('|'); checklistById(id).items[+i].done=t.checked; commit(); return; }
+  if(t.dataset.taskdone){ const k=D.tasks.find(x=>x.id===t.dataset.taskdone); k.status=t.checked?'done':'todo'; commit(); if(t.checked) toast('Nice — marked done',()=>{k.status='todo'; commit();}); return; }
+  if(t.id==='taskFilter'){ UI.taskFilter=t.value; render(); return; }
+});
+document.addEventListener('submit',e=>{
+  const f=e.target;
+  if(f.id==='msgForm'){ e.preventDefault(); const v=$('#msgText').value.trim(); if(!v) return; (D.messages[UI.channel]=D.messages[UI.channel]||[]).push({from:ME_MGR,text:v,when:nowStamp()}); commit(); $('#msgText')&&$('#msgText').focus(); return; }
+  if(f.id==='annForm'){ e.preventDefault(); const v=$('#annText').value.trim(); if(!v) return; const loc=$('#annLoc').value||null; const a={id:nid('a'),title:v.length>60?v.slice(0,57)+'…':v,text:v,from:ME_MGR,loc,when:nowStamp(),pinned:$('#annPin').checked,seen:[]}; D.announcements.unshift(a); commit(); toast(loc?`Announcement posted to ${esc(LOCS[loc].name)}`:'Announcement posted to everyone');
+    if(!REAL) setTimeout(()=>{ a.seen.push(...annAudience(a).slice(0,3)); save(); if(UI.view==='messages'&&UI.channel==='ann') render(); },2500); return; }
+  if(f.id==='eMsgForm'){ e.preventDefault(); const v=$('#eMsgText').value.trim(); if(!v) return; const th=UI.emp.thread; const k=(th.startsWith('team-')||th.startsWith('dm-'))?th:'sh-'+th; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:v,when:nowStamp()}); commit(); $('#eMsgText')&&$('#eMsgText').focus(); return; }
+  if(f.dataset.cladd){ e.preventDefault(); const inp=f.querySelector('input'); const v=inp.value.trim(); if(!v) return; checklistById(f.dataset.cladd).items.push({t:v,done:false}); commit(); const again=$(`[data-cladd="${f.dataset.cladd}"] input`); again&&again.focus(); return; }
+});
+/* ======================= HOMEPAGE ======================= */
+function renderPlans(){
+  const c=PRICING.currency;
+  $('#plans').innerHTML=PRICING.plans.map((p,i)=>`<div class="plan ${p.featured?'featured':''} reveal ${['','d1','d2'][i]||''}">${p.featured?'<span class="tag">Most teams</span>':''}
+    <h3>${esc(p.name)}</h3><div class="price"><b>${p.price===0?'Free':c+p.price}</b>${p.price===0?'':`<span>${PRICING.period}</span>`}</div>
+    <div class="limit">Up to <b>${p.limit}</b> active employees · ${esc(p.blurb)}</div>
+    <ul>${PRICING.included.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+    <a class="btn ${p.featured?'btn-primary':'btn-ghost'}" href="#signup">${esc(p.cta)}</a></div>`).join('');
+}
+renderPlans();
+const nav=$('#siteNav'); const onScroll=()=>nav.classList.toggle('scrolled',window.scrollY>8); window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+$('#menuBtn').addEventListener('click',()=>{ const o=$('#navLinks').classList.toggle('open'); $('#menuBtn').setAttribute('aria-expanded',o); });
+$$('#navLinks a').forEach(a=>a.addEventListener('click',()=>{ $('#navLinks').classList.remove('open'); $('#menuBtn').setAttribute('aria-expanded','false'); }));
+const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce||!('IntersectionObserver' in window)){ $$('.reveal').forEach(el=>el.classList.add('in')); }
+else { const io=new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }),{threshold:.12,rootMargin:'0px 0px -40px 0px'}); $$('.reveal').forEach(el=>io.observe(el)); }
+
+boot();
+})();
+</script>
+</body>
+</html>

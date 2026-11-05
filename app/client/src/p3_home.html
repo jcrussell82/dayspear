@@ -1,0 +1,403 @@
+</style>
+</head>
+<body>
+<!-- Icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <defs>
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6 6 0 0 1 3.5 5.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16ZM10 21h4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
+  <symbol id="i-board" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7v8.5a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H4.5A1.5 1.5 0 0 1 3 19.5V11Z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19v-6l2.5-8Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-megaphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4a1 1 0 0 0 1 1h3l8 5V4L7 9H4a1 1 0 0 0-1 1ZM19 9a4 4 0 0 1 0 6"/></symbol>
+ <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M8 7h4M8 11h4M8 15h4M2 21h20"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19"/></symbol>
+ <symbol id="i-printer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></symbol>
+ </defs>
+</svg>
+
+<div id="site">
+<header class="site-nav" id="siteNav">
+  <div class="wrap">
+    <a class="brand" href="#home" aria-label="DaySpear home"><img src="{{LOGO}}" alt="DaySpear" width="188" height="36"></a>
+    <nav class="nav-links" id="navLinks" aria-label="Main">
+      <a href="#product" data-nav="product">Product</a>
+      <a href="#how-it-works" data-nav="how-it-works">How it works</a>
+      <a href="#pricing" data-nav="pricing">Pricing</a>
+      <a href="#faq" data-nav="faq">FAQ</a>
+      <a href="#contact" data-nav="contact">Contact</a>
+      <a href="#login" class="mobile-only">Login</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="nav-login" href="#login">Login</a>
+      <a class="btn btn-primary" href="#signup">Try for free</a>
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false"><svg width="20" height="20"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+<div class="page" data-page="home">
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow reveal">For small teams with shifts</span>
+      <h1 class="reveal d1">Team scheduling, <em>made simple.</em></h1>
+      <p class="lede reveal d2">Build next week’s schedule in minutes, see time off before it becomes a conflict, and fill open shifts without a dozen texts. Your team gets it all on&nbsp;their&nbsp;phone.</p>
+      <div class="hero-ctas reveal d3">
+        <a class="btn btn-primary" href="#app/schedule">Open the live preview</a>
+        <a class="btn btn-ghost" href="#how-it-works">See how it works</a>
+      </div>
+      <div class="hero-note reveal d3">
+        <span><svg width="16" height="16"><use href="#i-check"/></svg> Free for up to 10 people</span>
+        <span><svg width="16" height="16"><use href="#i-pin"/></svg> Every location included</span>
+        <span><svg width="16" height="16"><use href="#i-phone"/></svg> Made for phones</span>
+      </div>
+    </div>
+    <div class="hero-visual reveal d2" aria-hidden="true">
+      <div class="hero-photo"><img src="{{HERO}}" alt=""></div>
+      <div class="float-card fc-schedule">
+        <div class="fc-title">Mon, Nov 9 <small>Downtown</small></div>
+        <div class="mini-row"><img src="{{AV_e2}}" alt=""><div class="mini-shift" style="background:#eaf1fe;box-shadow:inset 3px 0 0 #4d80f5"><b>6:00a – 2:00p</b><span>Shift lead</span></div></div>
+        <div class="mini-row"><img src="{{AV_e1}}" alt=""><div class="mini-shift" style="background:#eef5fe;box-shadow:inset 3px 0 0 #72aef9"><b>6:00a – 12:00p</b><span>Barista</span></div></div>
+        <div class="mini-row"><img src="{{AV_e3}}" alt=""><div class="mini-shift" style="background:repeating-linear-gradient(135deg,#fff8eb 0 6px,#fff3dc 6px 12px);border:1.5px dashed #fec368;color:#8a5a06"><b>Time off?</b><span>Pending</span></div></div>
+        <div class="mini-row"><img src="{{AV_e8}}" alt=""><div class="mini-shift" style="background:#f3f4f0;box-shadow:inset 3px 0 0 #0e210e"><b>4:30a – 12:30p</b><span>Bakery</span></div></div>
+      </div>
+      <div class="float-bubble fb-avatar"><img src="{{AV_e5}}" alt=""><span class="fb-badge">✓</span></div>
+      <div class="float-bubble fb-tile fb-cal"><svg width="26" height="26"><use href="#i-cal"/></svg></div>
+      <div class="float-bubble fb-tile fb-chat"><svg width="22" height="22"><use href="#i-chat"/></svg></div>
+      <div class="float-bubble fb-pill"><span class="pill pill-green">Week published</span></div>
+      <div class="float-bubble fb-avatar sm2"><img src="{{AV_e2}}" alt=""></div>
+      <div class="float-card fc-phone">
+        <div class="fc-title">Coverage <span class="pill pill-amber">Needed</span></div>
+        <div style="font-size:13px;font-weight:600">Sat, Nov 14 · 7a–1p</div>
+        <div style="font-size:12px;color:#6b7a6c;margin-bottom:10px">Barista · Riverside</div>
+        <div style="display:flex;gap:6px"><span class="btn btn-green btn-xs" style="flex:1">I can take it</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="industries">
+  <div class="wrap">
+    <strong>Built for teams like</strong>
+    <span class="chip-soft">Cafés &amp; bakeries</span><span class="chip-soft">Restaurants</span><span class="chip-soft">Retail shops</span><span class="chip-soft">Clinics</span><span class="chip-soft">Salons</span><span class="chip-soft">Gyms &amp; studios</span>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">The essentials, done well</span>
+      <h2>One calm place for the <br class="br-lg">week ahead</h2>
+      <p>DaySpear covers the schedule and the everyday coordination around it. <br class="br-lg">Nothing more to learn, nothing extra to pay for.</p>
+    </div>
+    <div class="grid-3">
+      <a class="tile tile-link reveal" href="#product"><div class="ico"><svg width="22" height="22"><use href="#i-cal"/></svg></div><h4>Build the week fast</h4><p>Drag shifts, copy last week, and publish once. Time-off requests show up right in the grid.</p><span class="more">See the schedule</span></a>
+      <a class="tile tile-link reveal d1" href="#product"><div class="ico amber"><svg width="22" height="22"><use href="#i-swap"/></svg></div><h4>Fill gaps without texting</h4><p>Open shifts and swaps have a clear status, so you always know what still needs covering.</p><span class="more">See coverage</span></a>
+      <a class="tile tile-link reveal d2" href="#how-it-works"><div class="ico blue"><svg width="22" height="22"><use href="#i-phone"/></svg></div><h4>Your team, on their phones</h4><p>Shifts, checklists, announcements and chat in a web app they open from a link.</p><span class="more">How it works</span></a>
+    </div>
+  </div>
+</section>
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="photo-band reveal">
+      <img src="{{TEAM}}" alt="A small team planning their week together">
+      <div class="pb-copy">
+        <span class="eyebrow" style="color:var(--green)">Multiple locations, included</span>
+        <h3>Second shop? Same plan.</h3>
+        <p>Add as many locations as you run. People can work at more than one, the schedule filters in a click, and each location gets its own team chat and checklists. We don’t think growing should cost you a surcharge.</p>
+        <div class="stat-row">
+          <div class="stat"><b>Every plan</b><span>includes multi-location</span></div>
+          <div class="stat"><b>Flat price</b><span>not per employee</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="teaser reveal">
+      <div><span class="prov-banner">⚑ Provisional pricing</span><h3>Free for up to 10 people. Flat monthly pricing after that.</h3><p>Never per employee. Every location included in every plan.</p></div>
+      <a class="btn btn-primary" href="#pricing">See pricing</a>
+    </div>
+  </div>
+</section>
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final reveal">
+      <h2>Try the week before you commit to it</h2>
+      <p>The preview below is fully clickable: build a schedule, approve time off, fill a shift, and see what your team sees on their phone.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-green" href="#app/schedule">Open the manager preview</a>
+        <a class="btn" style="border-color:rgba(255,255,255,.25);color:#fff" href="#app/employee">See the employee view</a>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<div class="page" data-page="product" hidden>
+<section class="page-hero"><div class="wrap"><span class="eyebrow reveal">Product</span><h1 class="reveal d1">Everything around the schedule</h1><p class="reveal d2">The weekly schedule, time off, coverage, team communication and simple checklists—built for small teams with shifts.</p></div></section>
+<section class="section" style="padding-top:24px">
+  <div class="wrap">
+
+    <div class="feature">
+      <div class="f-copy reveal">
+        <span class="eyebrow">Weekly schedule</span>
+        <h3>Build the week by dragging, not by spreadsheet</h3>
+        <p>See everyone, every role and every location in one grid. Click an empty slot to add a shift, drag to move it, and publish when you’re ready—your team is notified once, not on every edit.</p>
+        <ul class="f-list">
+          <li>Hours per person and per day as you build</li>
+          <li>Drafts stay private until you publish</li>
+          <li>Attach an opening or closing checklist to a shift</li>
+        </ul>
+      </div>
+      <div class="f-visual reveal d1">
+        <div class="panel" style="max-width:480px">
+          <div style="display:grid;grid-template-columns:90px repeat(4,1fr);gap:6px;font-size:11px">
+            <div></div><b style="text-align:center">Mon</b><b style="text-align:center">Tue</b><b style="text-align:center">Wed</b><b style="text-align:center">Thu</b>
+            <div style="display:flex;gap:6px;align-items:center"><img src="{{AV_e1}}" class="avatar sm" alt="">Maya</div>
+            <div class="shift rc1" style="padding:5px 6px"><div class="t">6a–12p</div></div><div></div>
+            <div class="shift rc1" style="padding:5px 6px"><div class="t">6a–12p</div></div>
+            <div class="shift rc1" style="padding:5px 6px"><div class="t">12p–6p</div></div>
+            <div style="display:flex;gap:6px;align-items:center"><img src="{{AV_e2}}" class="avatar sm" alt="">Jordan</div>
+            <div class="shift rc0" style="padding:5px 6px"><div class="t">6a–2p</div></div>
+            <div class="shift rc0" style="padding:5px 6px"><div class="t">6a–2p</div></div><div></div>
+            <div class="shift rc0" style="padding:5px 6px"><div class="t">6a–2p</div></div>
+            <div style="display:flex;gap:6px;align-items:center"><img src="{{AV_e4}}" class="avatar sm" alt="">Marcus</div><div></div>
+            <div class="shift rc1" style="padding:5px 6px"><div class="t">12p–6p</div></div>
+            <div class="shift rc1 draft" style="padding:5px 6px"><div class="t">12p–6p</div></div><div></div>
+            <div style="display:flex;gap:6px;align-items:center"><img src="{{AV_e8}}" class="avatar sm" alt="">Luis</div>
+            <div class="shift rc3" style="padding:5px 6px"><div class="t">4:30a–12:30p</div></div>
+            <div class="shift rc3" style="padding:5px 6px"><div class="t">4:30a–12:30p</div></div>
+            <div class="shift rc3" style="padding:5px 6px"><div class="t">4:30a–12:30p</div></div><div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px;color:#6b7a6c"><span>1 draft change</span><span class="btn btn-primary btn-xs">Publish week</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature flip">
+      <div class="f-copy reveal">
+        <span class="eyebrow">Time off</span>
+        <h3>See the conflict before you create it</h3>
+        <p>Pending requests show right on the schedule, so you notice Emma asked for Friday off before you put her on the register. Approve a request and DaySpear offers to turn her shift into an open shift in the same step.</p>
+        <ul class="f-list">
+          <li>Pending and approved time off, visible in the grid</li>
+          <li>A clear warning if you schedule over a request</li>
+          <li>Employees request time off from their phone in seconds</li>
+        </ul>
+      </div>
+      <div class="f-visual mist reveal d1">
+        <div class="panel">
+          <div class="req attn" style="border:0;padding:0;background:none">
+            <img src="{{AV_e3}}" class="avatar lg" alt="">
+            <div>
+              <div class="who"><b>Emma Lindqvist</b><span class="pill pill-amber">Pending</span></div>
+              <div class="meta">Fri, Nov 13 · All day · “Sister’s wedding rehearsal”</div>
+              <div class="warn">⚠ Scheduled 7a–3p that day (Front counter)</div>
+              <div class="actions"><span class="btn btn-primary btn-xs">Approve &amp; open shift</span><span class="btn btn-ghost btn-xs">Decline</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="f-copy reveal">
+        <span class="eyebrow">Swaps &amp; coverage</span>
+        <h3>Always know if a shift is still uncovered</h3>
+        <p>When someone can’t make it, they post the shift. Teammates who are free and qualified can offer to take it, and you approve with one tap. Every request has a plain status: needs coverage, offer waiting on you, or covered.</p>
+        <ul class="f-list">
+          <li>Only people without a conflict are shown as available</li>
+          <li>Each shift has its own short conversation</li>
+          <li>Manager approval stays in the loop—optional per team</li>
+        </ul>
+      </div>
+      <div class="f-visual reveal d1">
+        <div class="panel" style="display:grid;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b style="font-size:14px">Sat 7a–1p · Barista</b><div class="muted" style="font-size:12px">Sofia → anyone · Riverside</div></div><span class="pill pill-amber">Needs coverage</span></div>
+          <hr style="border:0;border-top:1px solid #eef2ee;margin:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b style="font-size:14px">Thu 12p–6p · Barista</b><div class="muted" style="font-size:12px">Marcus → Sam offered · Downtown</div></div><span class="pill pill-blue">Waiting on you</span></div>
+          <hr style="border:0;border-top:1px solid #eef2ee;margin:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b style="font-size:14px">Tue 2p–8p · Counter</b><div class="muted" style="font-size:12px">Hannah → Sofia · Riverside</div></div><span class="pill pill-green">Covered</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:140px">
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22"><use href="#i-megaphone"/></svg></div><h4>Announcements</h4><p>Post once, see who’s read it. Pin the important ones so new hires find them.</p></div>
+      <div class="tile reveal d1"><div class="ico blue"><svg width="22" height="22"><use href="#i-chat"/></svg></div><h4>Team chat &amp; shift threads</h4><p>A team channel per location, plus a short thread on any shift—“where are the extra lids?” stays with the shift it belongs to.</p></div>
+      <div class="tile reveal d2"><div class="ico amber"><svg width="22" height="22"><use href="#i-check"/></svg></div><h4>Checklists &amp; to-dos</h4><p>Opening and closing duties that ride along with the shift. Simple to-dos assigned to a person, a shift, or a whole location.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final reveal">
+      <h2>Try the week before you commit to it</h2>
+      <p>The preview below is fully clickable: build a schedule, approve time off, fill a shift, and see what your team sees on their phone.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-green" href="#app/schedule">Open the manager preview</a>
+        <a class="btn" style="border-color:rgba(255,255,255,.25);color:#fff" href="#app/employee">See the employee view</a>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<div class="page" data-page="how-it-works" hidden>
+<section class="page-hero"><div class="wrap"><span class="eyebrow reveal">How it works</span><h1 class="reveal d1">Up and running before your next shift</h1><p class="reveal d2">Set up in an afternoon. Your team joins from a link—no app store, no training session.</p></div></section>
+<section class="section" style="background:var(--lav)">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">How it works</span>
+      <h2>Three steps to your first week</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><h4>Add your team</h4><p>Invite people by phone number or email. Set their roles and the locations they work at.</p></div>
+      <div class="step reveal d1"><h4>Build and publish the week</h4><p>Start from last week, adjust what changed, check for time-off conflicts, then publish.</p></div>
+      <div class="step reveal d2"><h4>Let the team handle the rest</h4><p>People see their shifts, request time off, and pick up open shifts from their phones. You approve.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0;background:var(--lav)">
+  <div class="wrap">
+    <div class="flow-grid">
+      <div class="flow-card reveal"><span class="eyebrow">For managers · on desktop</span><h3>Your week, in one place</h3>
+        <ol><li><b>Start from last week</b> and adjust what changed.</li><li><b>Check the flags</b> — pending time off, unavailability and overlaps are marked before you publish.</li><li><b>Publish</b> once; only people whose shifts changed are notified.</li><li><b>Approve</b> time off, swaps and pickups from one Requests list—or let pickups auto-approve.</li></ol></div>
+      <div class="flow-card reveal d1"><span class="eyebrow">For employees · on their phone</span><h3>Everything they need, nothing more</h3>
+        <ol><li><b>See the next shift</b>, who they’re working with, and its checklist.</li><li><b>Request time off</b> — a few hours, a day, or several days.</li><li><b>Pick up open shifts</b> or ask a teammate to swap.</li><li><b>Keep their availability</b> and notification preferences up to date.</li></ol></div>
+    </div>
+    <div class="install-note reveal">
+      <div class="ico"><svg width="22" height="22"><use href="#i-phone"/></svg></div>
+      <div><h4>No app store required</h4><p>DaySpear is a responsive web app. Employees open it from an invite link, and anyone can add it to their home screen. On iPhone, notifications work once DaySpear is added to the Home Screen and notifications are allowed—until then, email or text updates keep people in the loop.</p></div>
+    </div>
+  </div>
+</section>
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final reveal">
+      <h2>Try the week before you commit to it</h2>
+      <p>The preview below is fully clickable: build a schedule, approve time off, fill a shift, and see what your team sees on their phone.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-green" href="#app/schedule">Open the manager preview</a>
+        <a class="btn" style="border-color:rgba(255,255,255,.25);color:#fff" href="#app/employee">See the employee view</a>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<div class="page" data-page="pricing" hidden>
+<section class="page-hero"><div class="wrap"><span class="reveal"><span class="prov-banner" style="text-transform:none;letter-spacing:0">⚑ Provisional pricing — example numbers for review</span></span><h1 class="reveal d1">Simple, flat pricing as you grow</h1><p class="reveal d2">Free for small teams. After that, one flat monthly price by team size—never per employee. Every plan includes every location.</p></div></section>
+<section class="section pricing" style="padding-top:56px">
+  <div class="wrap">
+    <div class="plans" id="plans"></div>
+    <div class="price-foot">
+      <div class="note reveal"><h4>Included in every plan</h4>Weekly scheduling, time off, swaps and coverage, announcements, team chat, shift threads, checklists and to-dos, mobile access, and unlimited locations.</div>
+      <div class="note reveal d1"><h4>How team size is counted</h4>
+        <ul>
+          <li>Active team members across <b>all</b> locations, counted once each.</li>
+          <li>Someone counts once they accept their invite and have an active profile.</li>
+          <li>Archiving someone who has left frees their spot right away.</li>
+          <li>At a limit, you’ll see the next flat price before adding anyone. No surprise charges, and no one loses access.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note reveal" style="margin-top:20px;background:var(--deep);color:#c9d6c9;border:0;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-radius:18px;padding:22px 24px">
+      <div><h4 style="color:#fff;font-size:17px;margin-bottom:4px">More than 75 people?</h4>Let’s talk about what fits your team.</div>
+      <a class="btn btn-green btn-sm" href="#contact" data-topic="large">Contact us</a>
+    </div>
+    <div class="note reveal" style="margin-top:20px">
+      <h4>Still undecided</h4>Annual discounts, and whether a tier above 75 should exist or stay “Contact us”.
+    </div>
+  </div>
+</section>
+
+</div>
+<div class="page" data-page="faq" hidden>
+<section class="page-hero"><div class="wrap"><span class="eyebrow reveal">Questions</span><h1 class="reveal d1">Good to know</h1><p class="reveal d2">Straight answers about how DaySpear works, what it costs, and what it keeps.</p></div></section>
+<section class="section">
+  <div class="wrap">
+        <div class="faq">
+      <details class="reveal" open><summary>Do my employees need to download an app?</summary><p>No app store needed. DaySpear is a web app: employees open it from a link on any phone or computer. Anyone who likes can add it to their home screen so it opens like an app.</p></details>
+      <details class="reveal"><summary>Will we get notifications on our phones?</summary><p>Yes, with one caveat. On Android and desktop browsers, DaySpear can send notifications once you allow them. On iPhone and iPad, web notifications only work after you add DaySpear to your Home Screen (Share → Add to Home Screen) and allow notifications there. You can also choose email or text for important updates.</p></details>
+      <details class="reveal"><summary>What about team members without a smartphone?</summary><p>Managers can print a clean, black-and-white copy of the published week for each location to hang on the wall. Team members can also get their shifts by text message whenever a new schedule is published, with no app or smartphone needed.</p></details>
+      <details class="reveal"><summary>Can coworkers see my phone number?</summary><p>Not by default. Your manager can see your contact details for scheduling. Coworkers message you inside DaySpear. If your business turns on number sharing, your number still stays hidden until you choose to share it.</p></details>
+      <details class="reveal"><summary>Can I swap with a specific person?</summary><p>Yes. You can offer a shift to anyone who’s eligible, or ask a specific teammate. Your manager approves it—or the team can turn on auto-approval for pickups.</p></details>
+      <details class="reveal"><summary>Can I request part of a day off, or a whole week?</summary><p>Both. Requests can cover a few hours, a single day, or a range of days. Your manager sees them on the schedule while they’re pending.</p></details>
+      <details class="reveal"><summary>Does DaySpear replace Slack or our group chat?</summary><p>Not necessarily. DaySpear keeps shift-related talk, announcements, and a simple team chat next to the schedule. If your team already lives in another chat tool, you can keep using it for everything else.</p></details>
+      <details class="reveal"><summary>Is it a project management tool?</summary><p>No. Tasks and checklists exist to support shifts—opening duties, closing duties, a few to-dos. There are no Gantt charts, sprints, or HR paperwork.</p></details>
+      <details class="reveal"><summary>Do multiple locations cost extra?</summary><p>No. Every example plan includes unlimited locations.</p></details>
+      <details class="reveal"><summary>What personal information does DaySpear keep?</summary><p>Only what scheduling and team communication need: name, photo, contact details, roles, locations, availability and notification preferences. Birthdays are optional, month and day only. No HR records, pay details or ID numbers.</p></details>
+      <details class="reveal"><summary>Does it work in dark mode?</summary><p>Yes. Everyone can choose light, dark, or match their device.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final reveal">
+      <h2>Try the week before you commit to it</h2>
+      <p>The preview below is fully clickable: build a schedule, approve time off, fill a shift, and see what your team sees on their phone.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-green" href="#app/schedule">Open the manager preview</a>
+        <a class="btn" style="border-color:rgba(255,255,255,.25);color:#fff" href="#app/employee">See the employee view</a>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<div class="page" data-page="contact" hidden>
+<section class="page-hero"><div class="wrap"><span class="eyebrow reveal">Contact</span><h1 class="reveal d1">Talk to us</h1><p class="reveal d2">Questions, a walkthrough, or pricing for a larger team—send a note.</p></div></section>
+<section class="section" style="padding-top:24px">
+  <div class="wrap contact-grid">
+    <form class="contact-card reveal" id="contactForm" novalidate>
+      <div class="row-2"><div class="field"><label for="c-name2">Your name</label><input id="c-name2" required autocomplete="name"></div>
+      <div class="field"><label for="c-email2">Email</label><input id="c-email2" type="email" required autocomplete="email"></div></div>
+      <div class="row-2"><div class="field"><label for="c-biz">Business name</label><input id="c-biz" autocomplete="organization"></div>
+      <div class="field"><label for="c-size">Team size</label><select id="c-size"><option>1–10 people</option><option>11–25 people</option><option>26–75 people</option><option>More than 75</option></select></div></div>
+      <div class="field"><label for="c-topic">What’s this about?</label><select id="c-topic"><option value="question">A question about DaySpear</option><option value="demo">I’d like a walkthrough</option><option value="large">Pricing for more than 75 people</option><option value="recovery">I can’t sign in to my account</option><option value="feedback">Feedback on the prototype</option></select></div>
+      <div class="field"><label for="c-msg">Message</label><textarea id="c-msg" rows="5" required></textarea></div>
+      <p class="form-err" id="contactErr" hidden>Please add your name, a valid email and a message.</p>
+      <button class="btn btn-primary" type="submit">Send message</button>
+      <p class="muted" style="font-size:13px">Prototype: this form doesn’t send anything yet.</p>
+    </form>
+    <aside class="reveal d1" style="display:grid;gap:16px;align-content:start">
+      <div class="tile"><div class="ico"><svg width="22" height="22"><use href="#i-chat"/></svg></div><h4>Already using DaySpear?</h4><p>Message your manager inside the app for schedule questions. For account help, use this form.</p></div>
+      <div class="tile"><div class="ico blue"><svg width="22" height="22"><use href="#i-clock"/></svg></div><h4>When we reply</h4><p>Within one business day (example service level for the prototype).</p></div>
+    </aside>
+  </div>
+</section>
+</div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <img src="{{LOGO}}" alt="DaySpear">
+    <nav aria-label="Footer"><a href="#product">Product</a><a href="#how-it-works">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#contact">Contact</a><a href="#app/schedule">Live preview</a></nav>
+    <span>Design prototype · sample data only</span>
+  </div>
+</footer>
+</div>

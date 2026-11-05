@@ -1,0 +1,64 @@
+
+/* ======================= TO-DOS: edit, sub-items, drag to reorder ======================= */
+const subProg = t=>{ const it=t.items||[]; if(!it.length) return ''; const d=it.filter(x=>x.done).length; return `<span class="sub-prog ${d===it.length?'all':''}">${icon('check',11)} ${d}/${it.length}</span>`; };
+function openTaskModal(id){
+  const ex=id?D.tasks.find(t=>t.id===id):null;
+  const wk=D.shifts.filter(s=>s.w===UI.week&&s.emp).sort((a,b)=>a.d-b.d||toMin(a.s)-toMin(b.s));
+  if(ex&&ex.assign.type==='shift'){ const s=shiftById(ex.assign.ref); if(s&&!wk.includes(s)) wk.unshift(s); }
+  let type=ex?ex.assign.type:'person'; let items=(ex&&ex.items?ex.items:[]).map(x=>({...x}));
+  const dueOpts=DAYS.map((x,i)=>({w:UI.week,d:i})); if(ex&&ex.due&&ex.due.w!==UI.week) dueOpts.unshift(ex.due);
+  const dueSel=ex&&ex.due?`${ex.due.w}|${ex.due.d}`:'';
+  openModal(`${modalHead(ex?'Edit to-do':'New to-do')}<form id="taskForm"><div class="modal-body">
+    <div class="field"><label for="t-title">What needs doing?</label><input id="t-title" required placeholder="e.g. Restock napkins" value="${ex?esc(ex.title):''}"></div>
+    <div class="field"><span class="lbl">Assign to</span><div class="seg" id="t-type" role="group">${[['person','A person'],['shift','A shift'],['location','A location']].map(([k,l])=>`<button type="button" data-tt="${k}" class="${type===k?'on':''}" aria-pressed="${type===k}">${l}</button>`).join('')}</div>
+      <select id="t-ref" aria-label="Assignee"></select><span class="muted" id="t-hint" style="font-size:12.5px"></span></div>
+    <div class="row-2"><div class="field"><label for="t-due">Due</label><select id="t-due"><option value="">No due date</option>${dueOpts.map(o=>`<option value="${o.w}|${o.d}" ${dueSel===`${o.w}|${o.d}`?'selected':''}>${fmtDay(o.w,o.d)}</option>`).join('')}</select></div>
+      <div class="field"><label for="t-st">Status</label><select id="t-st">${[['todo','To do'],['doing','In progress'],['done','Done']].map(([k,l])=>`<option value="${k}" ${(ex?ex.status:'todo')===k?'selected':''}>${l}</option>`).join('')}</select></div></div>
+    <div class="field"><span class="lbl">Checklist <span class="muted" style="font-weight:400">(optional — break it into steps)</span></span>
+      <div id="t-items" class="t-items"></div>
+      <div class="t-add"><input id="t-newitem" placeholder="Add a step, e.g. Order lids" aria-label="New checklist step"><button type="button" class="btn btn-ghost btn-xs" id="t-additem">${icon('plus',12)} Add</button></div></div>
+  </div><div class="modal-foot">${ex?`<div class="left"><button type="button" class="btn btn-danger btn-sm" id="t-del">Delete</button></div>`:''}<button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-primary btn-sm" type="submit">${ex?'Save changes':'Add to-do'}</button></div></form>`, m=>{
+    const fill=()=>{ const sel=$('#t-ref',m); const cur=ex&&ex.assign.type===type?ex.assign.ref:null;
+      if(type==='person'){ const ppl=[...new Set([...activeIds(),...(cur&&PEOPLE[cur]?[cur]:[])])]; sel.innerHTML=ppl.map(i=>`<option value="${i}">${esc(PEOPLE[i].name)}</option>`).join(''); $('#t-hint',m).textContent='Shows on their phone until it’s done.'; }
+      if(type==='shift'){ sel.innerHTML=wk.map(s=>`<option value="${s.id}">${fmtDay(s.w,s.d)} · ${span(s)} · ${esc(firstOf(s.emp))} · ${esc(LOCS[s.loc].short)}</option>`).join('')||'<option value="">No shifts this week</option>'; $('#t-hint',m).textContent='Whoever works this shift sees it—even if the shift is swapped.'; }
+      if(type==='location'){ sel.innerHTML=Object.keys(LOCS).map(l=>`<option value="${l}">${esc(LOCS[l].name)}</option>`).join(''); $('#t-hint',m).textContent='Anyone working at this location can pick it up.'; }
+      if(cur) sel.value=cur; };
+    const drawItems=()=>{ $('#t-items',m).innerHTML=items.map((it,i)=>`<div class="t-item ${it.done?'done':''}"><input type="checkbox" data-ti-done="${i}" ${it.done?'checked':''} aria-label="Done"><input data-ti-text="${i}" value="${esc(it.t)}" aria-label="Step ${i+1}"><button type="button" class="icon-btn" data-ti-del="${i}" aria-label="Remove step">${icon('x',13)}</button></div>`).join('')+(items.length?`<p class="muted" style="font-size:12px">${items.filter(x=>x.done).length} of ${items.length} done</p>`:''); };
+    const addItem=()=>{ const inp=$('#t-newitem',m), v=inp.value.trim(); if(!v) return; items.push({t:v,done:false}); inp.value=''; drawItems(); inp.focus(); };
+    $$('#t-type button',m).forEach(b=>b.onclick=()=>{ type=b.dataset.tt; $$('#t-type button',m).forEach(x=>{x.classList.toggle('on',x===b); x.setAttribute('aria-pressed',x===b);}); fill(); });
+    $('#t-additem',m).onclick=addItem;
+    $('#t-newitem',m).addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addItem(); } });
+    $('#t-items',m).addEventListener('input',e=>{ const i=e.target.dataset.tiText; if(i!==undefined) items[+i].t=e.target.value; });
+    $('#t-items',m).addEventListener('change',e=>{ const i=e.target.dataset.tiDone; if(i!==undefined){ items[+i].done=e.target.checked; drawItems(); } });
+    $('#t-items',m).addEventListener('click',e=>{ const b=e.target.closest('[data-ti-del]'); if(b){ items.splice(+b.dataset.tiDel,1); drawItems(); } });
+    fill(); drawItems();
+    const del=$('#t-del',m); if(del) del.onclick=()=>{ const i=D.tasks.indexOf(ex); D.tasks.splice(i,1); closeModal(); commit(); toast('To-do deleted',()=>{ D.tasks.splice(i,0,ex); commit(); }); };
+    $('#taskForm',m).onsubmit=e=>{ e.preventDefault(); const title=$('#t-title',m).value.trim(); if(!title) return; const ref=$('#t-ref',m).value; if(!ref){ toast('Pick who or where this is for'); return; }
+      const dv=$('#t-due',m).value; const pending=$('#t-newitem',m).value.trim(); if(pending) items.push({t:pending,done:false});
+      const data={title,assign:{type,ref},due:dv===''?null:{w:+dv.split('|')[0],d:+dv.split('|')[1]},status:$('#t-st',m).value,items:items.filter(x=>x.t.trim()).map(x=>({t:x.t.trim(),done:x.done}))};
+      if(ex){ Object.assign(ex,data); closeModal(); commit(); toast('To-do updated'); }
+      else { D.tasks.unshift({id:nid('k'),...data}); UI.taskTab='todos'; closeModal(); commit(); toast('To-do added'); } };
+  });
+}
+// open a to-do by clicking or pressing Enter on it
+document.addEventListener('click',e=>{ if(e.target.closest('input,button,select,a,textarea')) return; const c=e.target.closest('[data-edittask]'); if(c) openTaskModal(c.dataset.edittask); });
+document.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('[data-edittask]')){ e.preventDefault(); openTaskModal(e.target.dataset.edittask); } });
+// sub-item ticks (employee phone view)
+document.addEventListener('change',e=>{ const s=e.target.dataset&&e.target.dataset.subitem; if(!s) return; const [id,i]=s.split('|'); const t=D.tasks.find(x=>x.id===id); if(!t) return; t.items[+i].done=e.target.checked; if(e.target.checked&&t.status==='todo') t.status='doing'; commit(); });
+
+/* drag & drop on the board: move between columns AND reorder within a column */
+let dragTask=null, dropRef=null;
+const clearDropMarks=()=>{ $$('.col.drop').forEach(x=>x.classList.remove('drop')); $$('.kcard.drop-before,.kcard.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after')); };
+document.addEventListener('dragstart',e=>{ const k=e.target.closest&&e.target.closest('[data-task]'); if(!k) return; dragTask=k.dataset.task; k.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragTask);}catch(_){} });
+document.addEventListener('dragover',e=>{ if(!dragTask) return; const c=e.target.closest('[data-col]'); if(!c) return; e.preventDefault(); clearDropMarks(); c.classList.add('drop');
+  const cards=[...c.querySelectorAll('.kcard')].filter(x=>x.dataset.task!==dragTask);
+  const after=cards.find(x=>{ const r=x.getBoundingClientRect(); return e.clientY<r.top+r.height/2; });
+  if(after){ after.classList.add('drop-before'); dropRef={col:c.dataset.col,id:after.dataset.task,after:false}; }
+  else if(cards.length){ cards[cards.length-1].classList.add('drop-after'); dropRef={col:c.dataset.col,id:cards[cards.length-1].dataset.task,after:true}; }
+  else dropRef={col:c.dataset.col,id:null}; });
+document.addEventListener('drop',e=>{ if(!dragTask) return; const c=e.target.closest('[data-col]'); if(!c) return; e.preventDefault();
+  const k=D.tasks.find(x=>x.id===dragTask), ref=dropRef||{col:c.dataset.col,id:null}; const from=D.tasks.indexOf(k), before={status:k.status,idx:from};
+  D.tasks.splice(from,1); k.status=ref.col;
+  let at; if(ref.id){ at=D.tasks.findIndex(x=>x.id===ref.id)+(ref.after?1:0); } else { const last=D.tasks.map((x,i)=>x.status===ref.col?i:-1).filter(i=>i>=0).pop(); at=last==null?D.tasks.length:last+1; }
+  D.tasks.splice(at,0,k); dragTask=null; dropRef=null; clearDropMarks(); commit(); });
+document.addEventListener('dragend',()=>{ dragTask=null; dropRef=null; clearDropMarks(); $$('.kcard.dragging').forEach(x=>x.classList.remove('dragging')); });

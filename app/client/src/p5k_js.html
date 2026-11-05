@@ -1,0 +1,57 @@
+
+/* ======================= PRINT (wall copy) ======================= */
+// Published view of a shift: drafts show their last published version; brand-new drafts are left out.
+const pubView = s=> s.draft ? (s.pub?{...s,...s.pub}:null) : s;
+function openPrintModal(){
+  const w=UI.week, locKeys=Object.keys(LOCS);
+  const def=UI.loc!=='all'?UI.loc:(locKeys.length>1?'each':locKeys[0]);
+  openModal(`${modalHead('Print schedule')}<form id="printForm"><div class="modal-body">
+    <p class="muted" style="font-size:13.5px">A clean, black-and-white copy of the <b>published</b> week to hang up. You can also choose “Save as PDF” in the print window.</p>
+    <div class="field"><label for="pr-loc">Location</label><select id="pr-loc">${locKeys.length>1?`<option value="each" ${def==='each'?'selected':''}>Each location on its own page</option>`:''}${locKeys.map(l=>`<option value="${l}" ${def===l?'selected':''}>${esc(LOCS[l].name)}</option>`).join('')}</select></div>
+    <div class="field"><span class="lbl">Week</span><div style="font-weight:600">${weekLabel(w)} <span class="muted" style="font-weight:400">· ${weekRel(w)} · change the week on the schedule first</span></div></div>
+    <div class="checks"><label><input type="checkbox" id="pr-open" checked> Include open shifts</label></div>
+    <div id="pr-warn" aria-live="polite"></div>
+    <p class="muted" style="font-size:12px">Leaves out phone numbers, pending requests, time-off reasons and hours totals.</p>
+  </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-primary btn-sm" type="submit">${icon('printer',14)} Print</button></div></form>`, m=>{
+    const locsSel=()=>{ const v=$('#pr-loc',m).value; return v==='each'?locKeys:[v]; };
+    const warn=()=>{ const ls=locsSel(), n=draftCount(w,ls), mine=ls.filter(canManage);
+      const unpub=ls.filter(l=>!(D.published[w]||{})[l]);
+      let h='';
+      if(unpub.length) h+=`<div class="alert amber">ℹ<div>${esc(locNames(unpub))} ${unpub.length>1?'haven’t':'hasn’t'} been published for this week yet, so ${unpub.length>1?'they’ll':'it’ll'} print empty.</div></div>`;
+      if(n) h+=`<div class="alert amber">ℹ<div><b>${n} unpublished change${n>1?'s':''} won’t be included.</b> The copy shows the week as your team currently sees it.${mine.length&&draftCount(w,mine)?` <button type="button" class="btn btn-ghost btn-xs" id="pr-publish" style="margin-left:4px">Publish first</button>`:''}</div></div>`;
+      $('#pr-warn',m).innerHTML=h;
+      const pb=$('#pr-publish',m); if(pb) pb.onclick=()=>{ publish(); warn(); };
+    };
+    $('#pr-loc',m).onchange=warn; warn();
+    $('#printForm',m).onsubmit=e=>{ e.preventDefault(); const ls=locsSel(), withOpen=$('#pr-open',m).checked; closeModal(); doPrint(w,ls,withOpen); };
+  });
+}
+function printPage(w,loc,withOpen){
+  const shifts=D.shifts.filter(s=>s.w===w).map(pubView).filter(s=>s&&s.loc===loc);
+  const people=[...new Set([...EMP_IDS.filter(id=>PEOPLE[id].status==='active'&&PEOPLE[id].locs.includes(loc)),...shifts.filter(s=>s.emp).map(s=>s.emp)])].filter(id=>PEOPLE[id]);
+  const pub=(D.published[w]||{})[loc];
+  const now=new Date(); const printed=`${DAYS[(now.getDay()+6)%7]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+  const cellFor=(emp,d)=>{
+    let out='';
+    if(emp){ const to=D.timeoff.find(t=>t.emp===emp&&t.status==='approved'&&inTO(t,w,d)); if(to) out+=`<div class="p-off">Off${to.s?' '+fmtT(to.s)+'–'+fmtT(to.e):''}</div>`; }
+    shifts.filter(s=>s.emp===emp&&s.d===d).sort((a,b)=>toMin(a.s)-toMin(b.s)).forEach(s=>{ out+=`<div class="p-sh"><b>${span(s)}</b><span>${esc(ROLES[s.role]||'')}</span></div>`; });
+    return out;
+  };
+  const row=(emp,label,sub)=>`<tr><th scope="row"><b>${esc(label)}</b>${sub?`<span>${esc(sub)}</span>`:''}</th>${[0,1,2,3,4,5,6].map(d=>`<td>${cellFor(emp,d)}</td>`).join('')}</tr>`;
+  const openRow = withOpen && shifts.some(s=>!s.emp) ? row(null,'Open shifts','Ask a manager to pick one up') : '';
+  return `<section class="pr-page">
+    <header class="pr-head"><div><div class="pr-biz">${esc(D.settings.business.name)}</div><h1>${esc(LOCS[loc].name)} schedule</h1><div class="pr-week">Week of ${weekLabel(w)}</div></div>
+      <div class="pr-mgr">Managers: ${esc(listNames(mgrsFor(loc).map(id=>PEOPLE[id].name))||'—')}</div></header>
+    <table class="pr-table"><thead><tr><th scope="col">Team</th>${[0,1,2,3,4,5,6].map(d=>`<th scope="col">${DAYS[d]} ${fmtNum(w,d)}</th>`).join('')}</tr></thead>
+      <tbody>${openRow}${people.map(id=>row(id,PEOPLE[id].name,ROLES[PEOPLE[id].role]||'')).join('')}</tbody></table>
+    <footer class="pr-foot">${pub?`Published ${esc(pub.when)} by ${esc(firstOf(pub.by))}`:'Not published yet'} · Printed ${printed} · Changes after this date won’t appear here — check DaySpear or ask your manager.</footer>
+  </section>`;
+}
+function doPrint(w,locs,withOpen){
+  $('#printArea').innerHTML=locs.map(l=>printPage(w,l,withOpen)).join('');
+  document.body.classList.add('has-print');
+  const done=()=>{ document.body.classList.remove('has-print'); window.removeEventListener('afterprint',done); };
+  window.addEventListener('afterprint',done);
+  setTimeout(()=>{ try{ window.print(); }catch(e){} setTimeout(done,1500); },50);
+}
+document.addEventListener('click',e=>{ if(e.target.closest('#printBtn')) openPrintModal(); });

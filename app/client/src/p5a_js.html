@@ -1,0 +1,84 @@
+
+<script>
+(function(){
+'use strict';
+
+/* =================================================================
+   PRICING — provisional example numbers. Edit here; the pricing
+   section re-renders from this object. Keep every plan's feature
+   list identical unless a restriction is deliberately decided.
+   ================================================================= */
+const PRICING = {
+  currency: '$',
+  period: '/month',
+  plans: [
+    { name: 'Free',     price: 0,  limit: 10, blurb: 'For a small team getting started.',          cta: 'Start free' },
+    { name: 'Team',     price: 8,  limit: 25, blurb: 'For a growing team, or a second location.',  cta: 'Choose Team', featured: true },
+    { name: 'Business', price: 18, limit: 75, blurb: 'For busier teams across several locations.', cta: 'Choose Business' }
+  ],
+  included: ['Unlimited locations', 'Schedule, time off & coverage', 'Announcements & team chat', 'Checklists & to-dos', 'Phone access for everyone']
+};
+
+/* ------------------------- Assets ------------------------- */
+const LOGO='{{LOGO}}', LOGO_WHITE='{{LOGO_WHITE}}';
+const AV = {e1:'{{AV_e1}}',e2:'{{AV_e2}}',e3:'{{AV_e3}}',e4:'{{AV_e4}}',e5:'{{AV_e5}}',e6:'{{AV_e6}}',e7:'{{AV_e7}}',e8:'{{AV_e8}}',e9:'{{AV_e9}}'};
+
+/* ------------------------- Reference data ------------------------- */
+const LOCS_SEED = { dt:{name:'Downtown',short:'DT',address:'214 Hennepin Ave',hours:'6:30a – 6p'}, rv:{name:'Riverside',short:'RV',address:'88 River Rd',hours:'7a – 3p'} };
+const ROLES_SEED = { lead:'Shift lead', barista:'Barista', counter:'Front counter', bakery:'Bakery' };
+let LOCS, ROLES, PEOPLE, EMP_IDS;
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let ME_MGR = 'mgr'; const ME_EMP = 'e1';
+/* REAL = signed-in, server-backed mode (decided in boot()). false = demo with sample data. */
+let REAL = false;
+const PEOPLE_SEED = {
+  mgr:{id:'mgr',name:'Alex Rivera',first:'Alex',locs:['dt','rv'],access:'owner',manages:['dt']},
+  mgr2:{id:'mgr2',name:'Priya Shah',first:'Priya',locs:['rv'],access:'manager',manages:['rv']},
+  e1:{id:'e1',name:'Maya Johnson',first:'Maya',role:'barista',locs:['dt']},
+  e2:{id:'e2',name:'Jordan Reyes',first:'Jordan',role:'lead',locs:['dt']},
+  e3:{id:'e3',name:'Emma Lindqvist',first:'Emma',role:'counter',locs:['dt']},
+  e4:{id:'e4',name:'Marcus Bell',first:'Marcus',role:'barista',locs:['dt']},
+  e8:{id:'e8',name:'Luis Moreno',first:'Luis',role:'bakery',locs:['dt']},
+  e9:{id:'e9',name:'Sam Novak',first:'Sam',role:'bakery',locs:['dt','rv']},
+  e7:{id:'e7',name:'Hannah Weiss',first:'Hannah',role:'lead',locs:['rv']},
+  e5:{id:'e5',name:'Sofia Alvarez',first:'Sofia',role:'counter',locs:['rv']},
+  e6:{id:'e6',name:'Theo Park',first:'Theo',role:'barista',locs:['rv']},
+  e10:{id:'e10',name:'Omar Haddad',first:'Omar',role:'counter',locs:['rv'],status:'invited'},
+  e11:{id:'e11',name:'Nina Brooks',first:'Nina',role:'barista',locs:['dt'],status:'archived'}
+};
+const ORDER_SEED = ['e2','e1','e4','e3','e8','e9','e7','e6','e5','e10','e11'];
+
+/* ------------------------- Dates ------------------------- */
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+const addDays = (d,n)=>{const x=new Date(d); x.setDate(x.getDate()+n); return x;};
+const THIS_MON = addDays(TODAY, -((TODAY.getDay()+6)%7));
+const dateOf = (w,d)=>addDays(THIS_MON, 7*w+d);
+const todayW = 0, todayD = (TODAY.getDay()+6)%7;
+const isToday = (w,d)=>w===todayW&&d===todayD;
+const isPast = (w,d)=> w<todayW || (w===todayW && d<todayD);
+const fmtDay = (w,d)=>{const x=dateOf(w,d); return `${DAYS[d]}, ${MONTHS[x.getMonth()]} ${x.getDate()}`;};
+const fmtNum = (w,d)=>dateOf(w,d).getDate();
+const weekLabel = w=>{const a=dateOf(w,0), b=dateOf(w,6); return a.getMonth()===b.getMonth()?`${MONTHS[a.getMonth()]} ${a.getDate()} – ${b.getDate()}`:`${MONTHS[a.getMonth()]} ${a.getDate()} – ${MONTHS[b.getMonth()]} ${b.getDate()}`;};
+const weekRel = w=>({'-1':'Last week','0':'This week','1':'Next week'})[w] || (w>1?`In ${w} weeks`:`${-w} weeks ago`);
+
+/* ------------------------- Time helpers ------------------------- */
+const toMin = t=>{const [h,m]=t.split(':').map(Number); return h*60+m;};
+const fmtT = t=>{const m=toMin(t); let h=Math.floor(m/60), mm=m%60; const s=h<12?'a':'p'; h=h%12||12; return h+(mm?':'+String(mm).padStart(2,'0'):'')+s;};
+const span = s=>`${fmtT(s.s)}–${fmtT(s.e)}`;
+const hrs = s=>{let a=toMin(s.s), b=toMin(s.e); if(b<=a) b+=1440; return (b-a)/60;};
+const overlaps = (a,b)=>a.w===b.w&&a.d===b.d&&toMin(a.s)<toMin(b.e)&&toMin(b.s)<toMin(a.e);
+const fmtH = h=>(Math.round(h*10)/10)+'h';
+
+/* ------------------------- Utilities ------------------------- */
+const $ = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const esc = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// random ids: safe when several people edit at once (letters and digits only — ids are joined with '-' in channel names)
+const nid = p=>p+Array.from(crypto.getRandomValues(new Uint32Array(2)),n=>n.toString(36)).join('');
+const avatar = (id,cls='')=>{ if(!id) return `<span class="avatar ${cls}" style="background:var(--t-amber);color:var(--amber-ink)">?</span>`; const p=PEOPLE[id]; const src=p.photo===''?null:(p.photo||AV[id]); if(src) return `<img class="avatar ${cls}" src="${src}" alt="${esc(p.name)}">`; const ini=p.name.split(' ').map(x=>x[0]).join(''); return `<span class="avatar ${cls}" style="background:var(--deep);color:var(--green)">${ini}</span>`; };
+const nameOf = id=>id?(PEOPLE[id]?PEOPLE[id].name:'Former teammate'):'Open shift';
+const firstOf = id=>id?(PEOPLE[id]?PEOPLE[id].first:'Former teammate'):'Anyone';
+const icon = (n,s=16)=>`<svg width="${s}" height="${s}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const listNames = a=>a.length<2?(a[0]||''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const nowStamp = ()=>{const d=new Date(); let h=d.getHours(), m=d.getMinutes(); return `Today ${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;};

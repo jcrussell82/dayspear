@@ -1,0 +1,90 @@
+function openLocation(key){
+  const L=key?LOCS[key]:{name:'',short:'',address:'',hours:''};
+  openModal(`${modalHead(key?'Edit location':'Add location')}<form id="locForm"><div class="modal-body">
+    <div class="row-2"><div class="field"><label for="lc-name">Name</label><input id="lc-name" required value="${esc(L.name)}"></div><div class="field"><label for="lc-short">Short label</label><input id="lc-short" maxlength="3" value="${esc(L.short)}" placeholder="e.g. NE"></div></div>
+    <div class="field"><label for="lc-addr">Address</label><input id="lc-addr" value="${esc(L.address)}"></div>
+    <div class="field"><label for="lc-hours">Opening hours</label><input id="lc-hours" value="${esc(L.hours)}" placeholder="e.g. 7a – 3p"></div>
+    <div class="field"><span class="lbl">Managers</span><div class="chips">${mgrIds().map(m=>`<label class="chip"><input type="checkbox" data-lmgr="${m}" ${key&&(PEOPLE[m].manages||[]).includes(key)?'checked':''}>${esc(PEOPLE[m].name)}</label>`).join('')}</div><span class="muted" style="font-size:12px">A location can have several managers. To make someone a manager, open their profile in Team &amp; roles.</span></div>
+    ${key?'':'<div class="alert green">✓<div>Locations are included in every plan.</div></div>'}
+  </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-primary btn-sm" type="submit">${key?'Save':'Add location'}</button></div></form>`, m=>{
+    $('#locForm',m).onsubmit=e=>{ e.preventDefault(); const name=$('#lc-name',m).value.trim(); if(!name) return; const k=key||nid('l');
+      $$('[data-lmgr]',m).forEach(x=>{ const p=PEOPLE[x.dataset.lmgr]; p.manages=(p.manages||[]).filter(l=>l!==k); if(x.checked){ p.manages.push(k); if(!p.locs.includes(k)) p.locs.push(k); } });
+      D.locs[k]={name,short:($('#lc-short',m).value.trim()||name.slice(0,2)).toUpperCase(),address:$('#lc-addr',m).value.trim(),hours:$('#lc-hours',m).value.trim()};
+      closeModal(); commit(); toast(key?'Location saved':`${esc(name)} added`); };
+  });
+}
+function openDMPicker(){
+  const ids=[...new Set([...mgrIds(),...EMP_IDS])].filter(x=>x!==ME_MGR&&PEOPLE[x]&&PEOPLE[x].status!=='archived');
+  const act=ids.filter(x=>PEOPLE[x].status==='active'), inv=ids.filter(x=>PEOPLE[x].status==='invited');
+  const sub=x=>isMgr(x)?mgrLabel(x):[ROLES[PEOPLE[x].role],locNames(PEOPLE[x].locs)].filter(Boolean).join(' · ');
+  const row=x=>`<div class="dir-row">${avatar(x,'sm')}<span><b>${esc(PEOPLE[x].name)}</b><small>${esc(sub(x))}</small></span>${PEOPLE[x].status==='active'?`<button type="button" class="btn btn-ghost btn-xs" data-msgperson="${x}">Message</button>`:'<span class="pill pill-amber nodot">Invited</span>'}</div>`;
+  const body = !ids.length
+    ? `<div class="empty" style="padding:28px 20px"><p style="margin-bottom:14px">No one to message yet. Invite your team, and you’ll be able to message them once they join.</p><button type="button" class="btn btn-primary btn-sm" data-close data-go="settings" data-sset="team">Invite people</button></div>`
+    : `${act.length?`<div class="card" style="padding:4px 14px">${act.map(row).join('')}</div>`:`<p class="muted" style="font-size:13.5px">No one has joined yet.</p>`}
+       ${inv.length?`<div><div class="side-label" style="padding:4px 0 6px">Waiting to join</div><div class="card" style="padding:4px 14px">${inv.map(row).join('')}</div><p class="muted" style="font-size:12px;margin-top:8px">You can message people once they accept their invite.</p></div>`:''}`;
+  openModal(`${modalHead('New message')}<div class="modal-body" style="padding-bottom:20px">${body}</div>`);
+}
+
+/* ======================= SETTINGS ======================= */
+const SET_SECTIONS=[['business','Business & locations','building'],['team','Team & roles','users'],['sched','Scheduling','cal'],['requests','Requests','inbox'],['messages','Messages & notifications','chat'],['tasks','Tasks & checklists','check'],['plan','Plan','card'],['sep'],['you','Your preferences','user']];
+const getPath=p=>p.split('.').reduce((o,k)=>o[k],D.settings);
+function setPath(p,v){ const ks=p.split('.'); const last=ks.pop(); ks.reduce((o,k)=>o[k],D.settings)[last]=v; }
+const lid=p=>'lb-'+p.replace(/\./g,'-');
+const sw=(path,label,desc,decided)=>`<div class="set-row"><div><b id="${lid(path)}">${label}</b>${desc?`<p>${desc}</p>`:''}${decided?`<span class="decided">✓ ${decided}</span>`:''}</div><label class="switch"><input type="checkbox" role="switch" data-setting="${path}" ${getPath(path)?'checked':''} aria-labelledby="${lid(path)}"><span></span></label></div>`;
+const selRow=(path,label,desc,opts)=>`<div class="set-row"><div><b id="${lid(path)}">${label}</b>${desc?`<p>${desc}</p>`:''}</div><select data-setting="${path}" aria-labelledby="${lid(path)}">${opts.map(([v,l,dis])=>`<option value="${v}" ${String(getPath(path))===String(v)?'selected':''} ${dis?'disabled':''}>${l}</option>`).join('')}</select></div>`;
+const inpStyle='border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);color:var(--ink)';
+function renderSettings(){
+  if(!UI.set) UI.set='business';
+  const S=D.settings; let b='';
+  if(UI.set==='business'){
+    b+=`<div class="set-card"><h3>Business</h3><div class="set-row"><div><b id="lb-bn">Business name</b><p>Shown to your team and on invites.</p></div><input type="text" data-setting="business.name" value="${esc(S.business.name)}" aria-labelledby="lb-bn"></div>
+      <div class="set-row"><div><b id="lb-bt">Type of business</b></div><input type="text" data-setting="business.type" value="${esc(S.business.type)}" aria-labelledby="lb-bt"></div></div>
+      <div class="set-card"><h3>Locations</h3><p class="sub">Every plan includes unlimited locations.</p>${Object.keys(LOCS).map(k=>{const L=LOCS[k]; const n=activeIds().filter(i=>PEOPLE[i].locs.includes(k)).length; return `<button class="list-row" data-editloc="${k}"><span class="avatar" style="border-radius:10px;background:var(--mist)">${esc(L.short)}</span><span><b>${esc(L.name)}</b><br><span class="muted">${esc(L.address||'No address')} · ${esc(L.hours||'Hours not set')} · ${n} people</span><br><span class="muted">Managers: ${esc(listNames(mgrsFor(k).map(x=>PEOPLE[x].name))||'none yet')}</span></span><span class="muted">Edit</span></button>`;}).join('')}
+      <div class="set-row"><div class="muted" style="font-size:13px">Each location gets its own team chat and checklists.</div><button class="btn btn-ghost btn-sm" data-editloc="">${icon('plus',13)} Add location</button></div></div>`;
+  }
+  if(UI.set==='team'){
+    const all=[...Object.keys(PEOPLE).filter(i=>isMgr(i)&&!D.order.includes(i)).sort((a,b)=>isOwner(b)-isOwner(a)),...D.order.filter(i=>PEOPLE[i])]; const act=all.filter(i=>PEOPLE[i].status==='active'), inv=all.filter(i=>PEOPLE[i].status==='invited'), arc=all.filter(i=>PEOPLE[i].status==='archived');
+    const row=i=>{const p=PEOPLE[i]; return `<button class="list-row" data-profile="${i}">${avatar(i)}<span><b>${esc(p.name)}</b><br><span class="muted">${isMgr(i)?esc(mgrLabel(i))+(D.order.includes(i)?' · also on the schedule':''):p.roles.map(r=>esc(ROLES[r]||'')).join(', ')} · ${p.locs.map(l=>LOCS[l]?esc(LOCS[l].name):'').join(', ')}</span></span>${p.status==='active'?'<span class="pill pill-green">Active</span>':p.status==='invited'?'<span class="pill pill-amber">Invited</span>':'<span class="pill pill-gray">Archived</span>'}</button>`;};
+    b+=`<div class="set-card"><div class="set-row"><div><h3 style="font-size:16px">Team</h3><p>${act.length} active · ${inv.length} invited · ${arc.length} archived. Select anyone to open their profile.</p></div><button class="btn btn-primary btn-sm" id="inviteBtn">${icon('plus',13)} Invite someone</button></div>${[...act,...inv].map(row).join('')}</div>
+      ${arc.length?`<div class="set-card"><h3>Archived</h3><p class="sub">People who have left. Archiving frees their spot on your plan; past schedules keep their name.</p>${arc.map(row).join('')}</div>`:''}
+      <div class="set-card"><h3>Roles</h3><p class="sub">Roles decide who can be scheduled for what.</p>${Object.keys(ROLES).map(r=>`<div class="set-row"><input type="text" data-rolename="${r}" value="${esc(ROLES[r])}" aria-label="Role name" style="${inpStyle}"><span class="muted" style="font-size:12.5px">${activeIds().filter(i=>PEOPLE[i].roles.includes(r)).length} people</span></div>`).join('')}
+      <form class="set-row" id="addRole"><input type="text" placeholder="New role, e.g. Dishwasher" aria-label="New role name" style="${inpStyle}"><button class="btn btn-ghost btn-sm" type="submit">${icon('plus',13)} Add role</button></form></div>`;
+  }
+  if(UI.set==='sched'){
+    b+=`<div class="set-card"><h3>Scheduling</h3>${selRow('sched.weekStart','Week starts on','How weeks are shown.',[['Monday','Monday'],['Sunday','Sunday']])}
+      <div class="set-row"><div><b id="lb-ot">Overtime warning</b><p>Flag anyone scheduled over this many hours in a week.</p></div><input type="number" min="10" max="80" data-setting="sched.otHours" value="${S.sched.otHours}" aria-labelledby="lb-ot"></div>
+      ${sw('sched.notifyChangedOnly','Only notify people whose shifts changed','When you publish, people with no changes aren’t pinged.')}
+      <div class="set-row"><div><b>Drafts stay private until you publish</b><p>Edits show as dashed drafts. Your team sees the week only after you publish.</p></div><span class="pill pill-green nodot">Always on</span></div></div>`;
+  }
+  if(UI.set==='requests'){
+    b+=`<div class="set-card"><h3>Shift coverage &amp; swaps</h3>${sw('requests.autoApprove','Auto-approve picked-up shifts','When an eligible teammate takes an open shift or accepts a swap, it’s confirmed right away. Off means you approve each one in Requests.','Decided: optional for each team')}
+      ${sw('requests.namedSwaps','Let employees ask a specific teammate','Besides offering a shift to anyone eligible, employees can ask one named teammate to take it.','Decided')}</div>
+      <div class="set-card"><h3>Time off</h3>${sw('requests.partialDay','Allow part-day requests','For example 1pm–3pm for an appointment.','Decided')}${sw('requests.multiDay','Allow multi-day requests','A range of days in one request.','Decided')}
+      ${selRow('requests.noticeDays','Suggested notice','Employees see a gentle reminder for shorter notice. Requests are never blocked.',[[0,'No reminder'],[3,'3 days'],[7,'7 days'],[14,'14 days']])}</div>`;
+  }
+  if(UI.set==='messages'){
+    b+=`<div class="set-card"><h3>Messages</h3>${sw('messages.teamChat','Team chat','A general chat for everyone and for each location, alongside announcements and shift conversations.','Decided: allowed')}
+      <div class="set-row"><div><b>Direct messages</b><p>Coworkers can always message each other in DaySpear without sharing contact details.</p></div><span class="pill pill-green nodot">Always on</span></div>
+      ${sw('messages.phoneSharing','Let employees share their phone number with coworkers','Off by default. When on, each person still opts in before their number appears. Managers always see contact details for scheduling.')}
+      ${sw('messages.birthdays','Birthday announcements','A short note on someone’s birthday, only for people who opt in. Month and day only.')}</div>
+      <div class="set-card"><h3>Notifications</h3><p class="sub">Defaults for new team members. Everyone can change their own.</p>${sw('messages.defaults.push','App notifications','Android and desktop once allowed; iPhone after DaySpear is added to the Home Screen.')}${sw('messages.defaults.email','Email')}${sw('messages.defaults.sms','Text message','For schedule changes and urgent coverage.')}
+      ${sw('messages.quietHours','Quiet hours (9pm–7am)','Hold non-urgent notifications overnight.')}</div>`;
+  }
+  if(UI.set==='tasks'){
+    b+=`<div class="set-card"><h3>Checklists</h3>${selRow('tasks.progress','Checklist progress','One set of ticks per checklist per day, shared by whoever is working.',[['today','Shared for today'],['shift','Separate for each shift (not in this version)',true]])}
+      <div class="set-row" style="padding-top:0;border-top:0"><span class="decided">✓ Decided: one shared “today” state for now</span></div>
+      ${selRow('tasks.resetAt','Reset checklists each day at','',[['03:00','3:00 AM'],['04:00','4:00 AM'],['05:00','5:00 AM']])}</div>
+      <div class="set-card"><h3>To-dos</h3>${selRow('tasks.whoCreates','Who can create to-dos','',[['managers','Managers only'],['leads','Managers and shift leads'],['everyone','Everyone']])}
+      <div class="set-row"><div><b>Assign to a person, a shift, or a location</b><p>Shift to-dos follow the shift if it’s swapped.</p></div><span class="pill pill-green nodot">Built in</span></div></div>`;
+  }
+  if(UI.set==='plan'){ b+=planSection(); }
+  if(UI.set==='you'){
+    b+=`<div class="set-card"><h3>Your preferences</h3><p class="sub">Only affects you, ${esc(PEOPLE[ME_MGR].first)}.</p>
+      <div class="set-row"><div><b>Appearance</b><p>Light, dark, or match your device.</p></div><div class="ts-seg" style="width:auto" role="group" aria-label="Appearance">${['light','dark','system'].map(t=>`<button type="button" data-theme-pick="${ME_MGR}|${t}" class="${PEOPLE[ME_MGR].theme===t?'on':''}" aria-pressed="${PEOPLE[ME_MGR].theme===t}">${t==='system'?'Match device':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div></div>
+      <div class="set-row"><div><b>Profile, contact details &amp; notifications</b></div><button class="btn btn-ghost btn-sm" data-myprofile>Open my profile</button></div>
+      <div class="set-row"><div><b>Sign out</b></div><button class="btn btn-ghost btn-sm" id="signOut2">${icon('logout',14)} Sign out</button></div></div>
+      ${REAL?'':`<div class="set-card"><h3>Prototype tools</h3><div class="set-row"><div><b>Reset sample data</b><p>Changes in this preview are saved in this browser only.</p></div><button class="btn btn-danger btn-sm" id="resetDemo">Reset</button></div></div>`}`;
+  }
+  if(!isOwner(ME_MGR)&&UI.set!=='you'){ const own=mgrIds().filter(isOwner).map(firstOf); b=`<div class="ro-banner">${icon('lock',14)} <span>${UI.set==='team'?`You can invite people to ${esc(locNames(myLocs()))} and update roles for your team there.`:''} Only the owner (${esc(listNames(own))}) can change ${UI.set==='team'?'role names and manager access':'these settings'}.</span></div>`+(UI.set==='team'?b.replace(/data-rolename=/g,'disabled data-rolename=').replace('<form class="set-row" id="addRole">','<form class="set-row" id="addRole" hidden>'):`<fieldset class="ro-fs" disabled>${b}</fieldset>`); }
+  $('#v-settings').innerHTML=`<div class="settings"><nav class="set-nav" aria-label="Settings sections">${SET_SECTIONS.map(([k,l,ic])=>k==='sep'?'<div class="sep"></div>':`<button data-sset="${k}" class="${UI.set===k?'on':''}" ${UI.set===k?'aria-current="page"':''}>${icon(ic,16)} ${l}</button>`).join('')}</nav><div class="set-body">${b}</div></div>`;
+}

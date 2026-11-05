@@ -1,0 +1,93 @@
+
+/* ======================= APPEARANCE ======================= */
+const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : {matches:false};
+const isDark = pref => pref==='dark' || (pref==='system' && darkMQ.matches);
+function applyTheme(){ const d=isDark(PEOPLE[ME_MGR].theme); $('#app').classList.toggle('dark',d); $('#scrim').classList.toggle('dark',d); }
+if(darkMQ.addEventListener) darkMQ.addEventListener('change',()=>render());
+
+/* ======================= PROFILES ======================= */
+const SHIFT_PREFS={morning:'Mornings',afternoon:'Afternoons',evening:'Evenings',weekend:'Weekends'};
+const activeCount=()=>Object.keys(PEOPLE).filter(i=>PEOPLE[i].status==='active').length;
+const planFor=n=>PRICING.plans.find(p=>n<=p.limit);
+const vBadge=(p,k)=>p[k==='email'?'email':'phone']?((p.verified||{})[k]?'<span class="vb ok">✓ Verified</span>':'<span class="vb">Not verified</span>'):'';
+function profileForm(id){
+  const p=PEOPLE[id]; const S=D.settings.messages;
+  const avRow=d=>{const a=p.avail[d]||{t:'any',s:'06:00',e:'18:00'}; return `<div class="avail-row"><b>${DAYS[d]}</b><div class="ctrl"><select data-avt="${d}" aria-label="${DAYS[d]} availability"><option value="any" ${a.t==='any'?'selected':''}>Any time</option><option value="range" ${a.t==='range'?'selected':''}>Only between…</option><option value="off" ${a.t==='off'?'selected':''}>Unavailable</option></select><span data-avr="${d}" style="display:${a.t==='range'?'inline-flex':'none'};gap:6px;align-items:center"><input type="time" data-avs="${d}" value="${a.s}" step="900" aria-label="${DAYS[d]} from"> – <input type="time" data-ave="${d}" value="${a.e}" step="900" aria-label="${DAYS[d]} until"></span></div></div>`;};
+  const ch=(k,l)=>`<label><input type="checkbox" data-nch="${k}" ${p.notif.channels[k]?'checked':''}> ${l}</label>`;
+  const ev=(k,l)=>`<label><input type="checkbox" data-nev="${k}" ${p.notif.events[k]?'checked':''}> ${l}</label>`;
+  const hasPhoto=p.photo!==''&&(p.photo||AV[id]);
+  return `<form class="profile-form" data-pform="${id}" style="display:grid;gap:14px">
+   <div class="psec"><h4>Photo</h4><div class="photo-edit">${avatar(id)}<div style="display:grid;gap:6px"><b>${esc(p.name)}</b><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="btn btn-ghost btn-xs file-btn">${hasPhoto?'Change photo':'Add photo'}<input type="file" accept="image/*" data-photo="${id}" aria-label="Choose a photo"></span>${hasPhoto?`<button type="button" class="btn btn-ghost btn-xs" data-photo-remove="${id}">Remove</button>`:''}</div></div></div></div>
+   <div class="psec"><h4>Contact <span class="lock">${icon('lock',12)} Only managers see this</span></h4>
+     <div class="field"><label for="pf-phone-${id}">Mobile ${vBadge(p,'phone')}</label><input id="pf-phone-${id}" data-pf="phone" type="tel" value="${esc(p.phone)}" autocomplete="tel"></div>
+     <div class="field" style="margin-top:10px"><label for="pf-email-${id}">Email ${vBadge(p,'email')}${isMgr(id)?' <span class="muted" style="font-weight:400">· required for managers</span>':''}</label><input id="pf-email-${id}" data-pf="email" type="email" value="${esc(p.email)}" autocomplete="email" ${isMgr(id)?'required':''}></div>
+     <p class="muted" style="font-size:11.5px;margin-top:8px">You can sign in with either one. If you change one, we’ll send a code to confirm it.${isMgr(id)?' Your verified email is how you get back in if you lose your phone.':''}</p>
+     ${S.phoneSharing&&!isMgr(id)?`<div class="checks" style="margin-top:10px"><label><input type="checkbox" data-pf-share ${p.sharePhone?'checked':''}> Show my mobile number to coworkers</label></div>`:`<p class="muted" style="font-size:12px;margin-top:10px">Coworkers message you in DaySpear without seeing your number.</p>`}</div>
+   ${isMgr(id)?`<div class="psec"><h4>Locations I follow <span class="muted">Requests &amp; coverage alerts</span></h4><div class="chips">${Object.keys(LOCS).map(l=>`<label class="chip"><input type="checkbox" data-follow="${l}" ${(p.notif.follow||Object.keys(LOCS)).includes(l)?'checked':''}>${esc(LOCS[l].name)}</label>`).join('')}</div><p class="muted" style="font-size:11.5px;margin-top:8px">You manage ${esc(isOwner(id)?'every location (owner)':locNames(p.manages||[])||'no locations yet')}. Unfollowed locations won’t notify you or count in your Requests badge.</p></div>`:''}
+   ${D.order.includes(id)?`<div class="psec"><h4>Availability <span class="muted">Used when you’re scheduled</span></h4><div class="avail">${[0,1,2,3,4,5,6].map(avRow).join('')}</div></div>
+   <div class="psec"><h4>Preferences</h4><div class="field"><span class="lbl">Hours per week</span><div style="display:flex;gap:8px;align-items:center"><input type="number" min="0" max="60" data-ph="0" value="${p.prefHours[0]}" style="width:80px" aria-label="Fewest hours"> to <input type="number" min="0" max="60" data-ph="1" value="${p.prefHours[1]}" style="width:80px" aria-label="Most hours"></div></div>
+     <div class="field" style="margin-top:10px"><span class="lbl">Shifts I prefer</span><div class="chips">${Object.entries(SHIFT_PREFS).map(([k,l])=>`<label class="chip"><input type="checkbox" data-pshift="${k}" ${p.prefShifts.includes(k)?'checked':''}>${l}</label>`).join('')}</div></div></div>`:''}
+   <div class="psec"><h4>Notifications</h4><div class="field"><span class="lbl">How to reach me</span><div class="checks">${ch('push','App notifications')}${ch('email','Email')}${ch('sms','Text message')}</div></div>
+     <div class="field" style="margin-top:10px"><span class="lbl">Tell me about</span><div class="checks">${ev('schedule','My schedule changes')}${ev('openShifts','Open shifts I can pick up')}${ev('requests','Updates on my requests')}${ev('messages','Direct and shift messages')}${ev('announcements','Announcements')}</div></div>
+     <p class="muted" style="font-size:11.5px;margin-top:10px">On iPhone, app notifications work after you add DaySpear to your Home Screen (Share → Add to Home Screen) and allow them.</p></div>
+   ${S.birthdays?`<div class="psec"><h4>Birthday <span class="muted">Optional</span></h4><div class="checks"><label><input type="checkbox" data-pf-bday ${p.bdayOptIn?'checked':''}> Include me in birthday announcements</label></div><div style="display:flex;gap:8px;margin-top:10px" class="avail-row"><select data-bm aria-label="Birthday month"><option value="">Month</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${p.birthday&&p.birthday.m===i+1?'selected':''}>${m}</option>`).join('')}</select><select data-bd aria-label="Birthday day"><option value="">Day</option>${[...Array(31)].map((_,i)=>`<option value="${i+1}" ${p.birthday&&p.birthday.d===i+1?'selected':''}>${i+1}</option>`).join('')}</select></div><p class="muted" style="font-size:11.5px;margin-top:8px">Month and day only — no birth year.</p></div>`:''}
+   <div class="psec"><h4>Appearance</h4><div class="ts-seg" role="group" aria-label="Appearance">${['light','dark','system'].map(t=>`<button type="button" data-theme-pick="${id}|${t}" class="${p.theme===t?'on':''}" aria-pressed="${p.theme===t}">${t==='system'?'Match device':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div></div>
+   <button class="btn btn-primary" type="submit">Save changes</button>
+  </form>`;
+}
+function saveProfileForm(f){
+  const id=f.dataset.pform, p=PEOPLE[id];
+  const phone=$('[data-pf="phone"]',f).value.trim(), email=$('[data-pf="email"]',f).value.trim();
+  if(email&&!/^\S+@\S+\.\S+$/.test(email)){ toast('Please enter a valid email'); return; }
+  if(isMgr(id)&&!email){ toast('Owners and managers need a verified email for account recovery'); return; }
+  if(!email&&!phone){ toast('Keep at least one way to sign in'); return; }
+  p.verified=p.verified||{}; const sent=[];
+  if(email!==p.email&&email){ p.verified.email=false; sent.push('email'); }
+  if(digits(phone)!==digits(p.phone)&&phone){ p.verified.phone=false; sent.push('mobile number'); }
+  p.phone=phone; p.email=email;
+  if(sent.length) setTimeout(()=>toast(`We sent a code to confirm your new ${sent.join(' and ')} (prototype)`),400);
+  const sh=$('[data-pf-share]',f); if(sh) p.sharePhone=sh.checked;
+  $$('[data-avt]',f).forEach(s=>{ const d=s.dataset.avt; p.avail[d]={t:s.value,s:$(`[data-avs="${d}"]`,f).value||'06:00',e:$(`[data-ave="${d}"]`,f).value||'18:00'}; });
+  const ph=$$('[data-ph]',f); if(ph.length){ let a=+ph[0].value||0, b=+ph[1].value||0; if(b<a) [a,b]=[b,a]; p.prefHours=[a,b]; }
+  if($$('[data-pshift]',f).length) p.prefShifts=$$('[data-pshift]',f).filter(x=>x.checked).map(x=>x.dataset.pshift);
+  $$('[data-nch]',f).forEach(x=>p.notif.channels[x.dataset.nch]=x.checked);
+  $$('[data-nev]',f).forEach(x=>p.notif.events[x.dataset.nev]=x.checked);
+  if($$('[data-follow]',f).length) p.notif.follow=$$('[data-follow]',f).filter(x=>x.checked).map(x=>x.dataset.follow);
+  const bo=$('[data-pf-bday]',f); if(bo){ const m=+$('[data-bm]',f).value, d=+$('[data-bd]',f).value; p.birthday=m&&d?{m,d}:null; p.bdayOptIn=bo.checked&&!!p.birthday; if(bo.checked&&!p.birthday) toast('Pick a month and day to be included'); }
+  if($('#scrim').classList.contains('open')) closeModal();
+  commit(); toast('Profile saved');
+}
+function setPhoto(id,file){
+  if(!file||!/^image\//.test(file.type)) return;
+  const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>{ const c=document.createElement('canvas'); c.width=c.height=160; const s=Math.min(img.width,img.height);
+    c.getContext('2d').drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,160,160); PEOPLE[id].photo=c.toDataURL('image/jpeg',.82); afterPhoto(id); }; img.src=r.result; }; r.readAsDataURL(file);
+}
+function afterPhoto(id){ save(); if($('#scrim').classList.contains('open')){ closeModal(); openProfile(id); } render(); toast('Photo updated'); }
+function openProfile(id){
+  if(id===ME_MGR){ openModal(`${modalHead('Your profile &amp; preferences')}<div class="modal-body" style="padding-bottom:20px">${profileForm(ME_MGR)}</div>`, m=>m.classList.add('wide')); return; }
+  const canEdit=isOwner(ME_MGR)||(!isMgr(id)&&PEOPLE[id].locs.some(canManage));
+  const p=PEOPLE[id]; const S=D.settings.messages;
+  const status=p.status==='active'?'<span class="pill pill-green">Active</span>':p.status==='invited'?'<span class="pill pill-amber">Invite pending</span>':'<span class="pill pill-gray">Archived</span>';
+  const h=D.shifts.filter(s=>s.emp===id&&s.w===UI.week).reduce((a,s)=>a+hrs(s),0);
+  const avs=[0,1,2,3,4,5,6].map(d=>{const a=p.avail[d]||{t:'any'}; return `<div class="${a.t==='off'?'off':a.t==='range'?'part':''}">${DAYS[d]}<small>${a.t==='off'?'Off':a.t==='range'?fmtT(a.s)+'–'+fmtT(a.e):'Any'}</small></div>`;}).join('');
+  const chans=Object.entries({push:'App',email:'Email',sms:'Text'}).filter(([k])=>p.notif.channels[k]).map(([,v])=>v).join(', ')||'Off';
+  openModal(`${modalHead('Team member')}<div class="modal-body">
+    <div class="prof-head">${avatar(id,'xl')}<div><h3>${esc(p.name)}</h3><div class="meta">${status} ${esc(p.status==='invited'?(p.invited||'')+(p.inviteExpires!=null?` · link expires in ${p.inviteExpires} day${p.inviteExpires===1?'':'s'}`:''):p.status==='archived'?p.archived||'':isMgr(id)?mgrLabel(id):ROLES[p.role]||'')}</div></div>
+      <div class="acts">${p.status!=='archived'?`<button type="button" class="btn btn-primary btn-sm" data-msgperson="${id}">${icon('chat',14)} Message</button>`:''}</div></div>
+    <div class="pgrid edit-zone">
+      ${!isOwner(id)?`<div class="psec" style="grid-column:1/-1"><h4>Access <span class="muted">${isOwner(ME_MGR)?'Only the owner can change this':'Set by the owner'}</span></h4>
+        <div class="row-2"><div class="field"><label for="pp-access">Account type</label><select id="pp-access" ${isOwner(ME_MGR)?'':'disabled'}><option value="employee" ${p.access==='employee'?'selected':''}>Employee</option><option value="manager" ${p.access==='manager'?'selected':''}>Manager</option></select></div>
+        <div class="field" id="pp-manages-f" ${p.access==='manager'?'':'hidden'}><span class="lbl">Manages</span><div class="chips">${Object.keys(LOCS).map(l=>`<label class="chip"><input type="checkbox" data-pmanage="${l}" ${(p.manages||[]).includes(l)?'checked':''} ${isOwner(ME_MGR)?'':'disabled'}>${esc(LOCS[l].name)}</label>`).join('')}</div></div></div>
+        <p class="muted" style="font-size:11.5px;margin-top:8px">Managers can build and publish schedules, decide requests and post announcements for the locations they manage. A location can have several managers. Only the owner changes business settings and the plan.</p></div>`:''}
+      <div class="psec"><h4>Contact <span class="lock">${icon('lock',12)} Managers only</span></h4><dl class="kv"><dt>Mobile</dt><dd>${esc(p.phone)||'—'} ${vBadge(p,'phone')}</dd><dt>Email</dt><dd>${esc(p.email)||'—'} ${vBadge(p,'email')}</dd><dt>Coworkers see</dt><dd>${S.phoneSharing&&p.sharePhone?'Their mobile number (they opted in)':'No contact details; they message in DaySpear'}</dd></dl><p class="muted" style="font-size:11.5px;margin-top:8px">${esc(p.first)} keeps these up to date.</p></div>
+      <div class="psec"><h4>Roles &amp; locations <span class="muted">${canEdit?'Managers set these':'View only'}</span></h4>
+        <div class="field"><span class="lbl">Can work as</span><div class="chips">${Object.keys(ROLES).map(r=>`<label class="chip"><input type="checkbox" data-prole="${r}" ${p.roles.includes(r)?'checked':''}>${esc(ROLES[r])}</label>`).join('')}</div></div>
+        <div class="field" style="margin-top:10px"><label for="pp-role">Main role on the schedule</label><select id="pp-role">${Object.keys(ROLES).map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${esc(ROLES[r])}</option>`).join('')}</select></div>
+        <div class="field" style="margin-top:10px"><span class="lbl">Eligible locations</span><div class="chips">${Object.keys(LOCS).map(l=>`<label class="chip"><input type="checkbox" data-ploc="${l}" ${p.locs.includes(l)?'checked':''}>${esc(LOCS[l].name)}</label>`).join('')}</div></div></div>
+      <div class="psec"><h4>Availability <span class="muted">Set by ${esc(p.first)}</span></h4><div class="av-sum">${avs}</div></div>
+      <div class="psec"><h4>Preferences <span class="muted">Set by ${esc(p.first)}</span></h4><dl class="kv"><dt>Hours / week</dt><dd>${p.prefHours[0]}–${p.prefHours[1]}h<br><span class="muted">${fmtH(h)} scheduled ${weekRel(UI.week).toLowerCase()}</span></dd><dt>Prefers</dt><dd>${p.prefShifts.map(x=>SHIFT_PREFS[x]).join(', ')||'No preference'}</dd><dt>Notified by</dt><dd>${chans}</dd>${S.birthdays?`<dt>Birthday</dt><dd>${p.bdayOptIn&&p.birthday?MONTHS[p.birthday.m-1]+' '+p.birthday.d:'Not shared'}</dd>`:''}</dl></div>
+    </div></div>
+  <div class="modal-foot"><div class="left">${p.status==='invited'?`<button type="button" class="btn btn-ghost btn-sm" data-resend="${id}">Resend invite</button><a class="btn btn-ghost btn-sm" href="#invite" data-close>Preview their invite</a>`:''}${p.status==='archived'?`<button type="button" class="btn btn-ghost btn-sm" data-restore="${id}">Restore</button>`:`<button type="button" class="btn btn-danger btn-sm" data-archive="${id}">Archive</button>`}</div>
+    <button type="button" class="btn btn-ghost btn-sm" data-close>Close</button>${p.status!=='archived'&&canEdit?`<button type="button" class="btn btn-primary btn-sm" data-saveprof="${id}">Save</button>`:''}</div>`, m=>{ m.classList.add('wide'); if(!canEdit){ $$('.edit-zone input,.edit-zone select',m).forEach(x=>x.disabled=true); $$('[data-archive],[data-restore],[data-resend]',m).forEach(x=>x.remove()); } const ac=$('#pp-access',m); if(ac) ac.onchange=()=>{ $('#pp-manages-f',m).hidden=ac.value!=='manager'; }; });
+}
+function openDM(other, inPhone){ const k=dmKey(inPhone?ME:ME_MGR,other); if(!D.messages[k]) D.messages[k]=[]; if(inPhone){ UI.emp.tab='chat'; UI.emp.thread=k; render(); } else { UI.channel=k; if($('#scrim').classList.contains('open')) closeModal(); go('messages'); } }

@@ -1,0 +1,48 @@
+
+/* ======================= Events: profiles, settings, contact ======================= */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-profile],[data-myprofile],[data-msgperson],[data-saveprof],[data-archive],[data-restore],[data-resend],[data-sset],[data-theme-pick],[data-editloc],[data-photo-remove],#inviteBtn,#newDM,#signOut,#signOut2,[data-topic]');
+  if(!t) return; const ds=t.dataset;
+  if(ds.topic){ UI.topic=ds.topic; if($('#scrim').classList.contains('open')) closeModal(); return; }
+  if(ds.profile){ openProfile(ds.profile); return; }
+  if(ds.myprofile!==undefined){ openProfile(ME_MGR); return; }
+  if(ds.msgperson){ openDM(ds.msgperson,false); return; }
+  if(ds.sset){ UI.set=ds.sset; render(); $('#v-settings').scrollTop=0; return; }
+  if(ds.editloc!==undefined){ openLocation(ds.editloc||null); return; }
+  if(ds.themePick){ const [id,th]=ds.themePick.split('|'); PEOPLE[id].theme=th; save(); t.parentElement.querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b===t); b.setAttribute('aria-pressed',b===t);}); applyTheme(); if(UI.view==='employee'&&id===ME) render(); return; }
+  if(ds.photoRemove){ PEOPLE[ds.photoRemove].photo=''; afterPhoto(ds.photoRemove); return; }
+  if(t.id==='inviteBtn'){ openInvite(); return; }
+  if(t.id==='newDM'){ openDMPicker(); return; }
+  if(REAL&&(t.id==='signOut'||t.id==='signOut2')){ realSignOut(); return; }
+  if(REAL&&ds.resend){ realResend(ds.resend); return; }
+  if(t.id==='signOut'||t.id==='signOut2'){ clearSession(); location.hash='#login'; toast('You’re signed out'); return; }
+  if(ds.saveprof){ const p=PEOPLE[ds.saveprof]; const m=$('#modal'); const roles=$$('[data-prole]',m).filter(x=>x.checked).map(x=>x.dataset.prole); const locs=$$('[data-ploc]',m).filter(x=>x.checked).map(x=>x.dataset.ploc); const main=$('#pp-role',m).value;
+    if(!locs.length){ toast('Pick at least one location'); return; } p.role=main; p.roles=[...new Set([main,...roles])]; p.locs=locs;
+    const ac=$('#pp-access',m); if(ac&&!ac.disabled){ p.access=ac.value; p.manages=p.access==='manager'?$$('[data-pmanage]',m).filter(x=>x.checked).map(x=>x.dataset.pmanage):[];
+      if(p.access==='manager'&&!p.manages.length){ toast('Pick at least one location for this manager'); return; }
+      p.manages.forEach(l=>{ if(!p.locs.includes(l)) p.locs.push(l); }); if(p.access==='manager'){ p.notif.follow=[...new Set([...(p.notif.follow||[]),...p.manages])]; }
+      if(p.access==='employee'&&!D.order.includes(ds.saveprof)) D.order.push(ds.saveprof); }
+    closeModal(); commit(); toast(`Saved ${esc(p.first)}’s roles and locations`); return; }
+  if(ds.archive){ const p=PEOPLE[ds.archive]; if(ds.archive===ME_MGR){ toast('You can’t archive yourself'); return; } if(!confirm(`Archive ${p.name}? Their upcoming shifts become open shifts and their spot on your plan is freed.`)) return;
+    let n=0; D.shifts.filter(s=>s.emp===ds.archive&&!isPast(s.w,s.d)).forEach(s=>{ snapPub(s); s.emp=null; s.cover={status:'needed',from:null,note:`${p.first} has left`}; markDraft(s); n++; });
+    p.status='archived'; p.archived='Archived just now'; closeModal(); commit(); toast(`${esc(p.first)} archived · spot freed${n?` · ${n} shift${n>1?'s':''} now open`:''}`); return; }
+  if(ds.restore){ const p=PEOPLE[ds.restore]; closeModal(); requireRoomFor(1,()=>{ p.status='active'; delete p.archived; if($('#scrim').classList.contains('open')) closeModal(); commit(); toast(`${esc(p.first)} restored`); },`Restoring ${p.first}`); return; }
+  if(ds.resend){ Object.assign(PEOPLE[ds.resend],{invited:'Resent just now',inviteExpires:7}); closeModal(); commit(); toast('New invite link sent · the old link no longer works (prototype)'); return; }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.setting){ const v=t.type==='checkbox'?t.checked:t.type==='number'?Math.max(1,+t.value||1):(/^\d+$/.test(t.value)&&t.tagName==='SELECT'?+t.value:t.value); setPath(t.dataset.setting,v); commit(); toast('Saved'); return; }
+  if(t.dataset.rolename){ const v=t.value.trim(); if(v){ D.roles[t.dataset.rolename]=v; commit(); toast('Role renamed'); } return; }
+  if(t.dataset.avt!==undefined){ const r=t.closest('.avail-row').querySelector('[data-avr]'); r.style.display=t.value==='range'?'inline-flex':'none'; return; }
+  if(t.dataset.photo){ setPhoto(t.dataset.photo,t.files&&t.files[0]); return; }
+});
+document.addEventListener('submit',e=>{
+  const f=e.target;
+  if(f.dataset.pform){ e.preventDefault(); saveProfileForm(f); return; }
+  if(f.id==='addRole'){ e.preventDefault(); const v=f.querySelector('input').value.trim(); if(!v) return; D.roles[nid('r')]=v; commit(); toast(`Role “${esc(v)}” added`); return; }
+  if(f.id==='contactForm'){ e.preventDefault(); const ok=$('#c-name2').value.trim()&&/^\S+@\S+\.\S+$/.test($('#c-email2').value.trim())&&$('#c-msg').value.trim();
+    $('#contactErr').hidden=!!ok; if(!ok) return;
+    if(REAL){ realContact(f); return; }
+    const first=esc($('#c-name2').value.trim().split(' ')[0]);
+    f.outerHTML=`<div class="contact-card sent-card" tabindex="-1" id="contactSent"><div class="ico">✓</div><h3 style="font-size:22px;margin-bottom:8px">Thanks, ${first}!</h3><p class="muted">This is a prototype, so your message wasn’t sent anywhere. In the real product, we’d reply by email.</p></div>`; $('#contactSent').focus(); return; }
+});

@@ -1,0 +1,71 @@
+
+/* ======================= REQUESTS ======================= */
+function renderRequests(){
+  const allPend=pendingTO().sort((a,b)=>a.w-b.w||a.d-b.d), pend=allPend.filter(canDecideTO), pendOther=allPend.filter(t=>!canDecideTO(t));
+  const hist=D.timeoff.filter(t=>t.status!=='pending'&&(isOwner(ME_MGR)||canDecideTO(t))).slice(-6).reverse();
+  const allCov=needsCover(), cov=allCov.filter(s=>canManage(s.loc)), covOther=allCov.filter(s=>!canManage(s.loc));
+  const otherNote=(n,locs,what)=>n?`<details class="other-locs"><summary>${n} more ${what} at ${esc(locNames(locs))} — handled by ${esc(mgrNames(locs))}</summary><div class="other-body">`:'';
+  const scope=isOwner(ME_MGR)?'':`<p class="scope-note">${icon('pin',13)} Showing requests for ${esc(locNames(myLocs()))}, where you’re a manager. Any manager of a location can decide; the first decision counts and the others see who made it.</p>`;
+  let h=scope+`<div class="tabs" role="tablist">
+    <button role="tab" data-reqtab="timeoff" class="${UI.reqTab==='timeoff'?'on':''}">Time off ${pend.length?`<span class="pill pill-amber nodot">${pend.length}</span>`:''}</button>
+    <button role="tab" data-reqtab="coverage" class="${UI.reqTab==='coverage'?'on':''}">Swaps &amp; coverage ${cov.length?`<span class="pill pill-amber nodot">${cov.length}</span>`:''}</button></div>`;
+  if(UI.reqTab==='timeoff'){
+    h+=`<div class="cols-2"><div><div class="card-head"><h3>Needs your decision</h3><span class="muted" style="font-size:13px">Pending requests also show on the schedule</span></div>`;
+    h+= pend.length? pend.map(toCard).join('') : `<div class="empty">All caught up — no pending requests.</div>`;
+    if(pendOther.length){ const ls=[...new Set(pendOther.flatMap(toLocs))].filter(l=>!canManage(l)); h+=otherNote(pendOther.length,ls,pendOther.length===1?'request':'requests')+pendOther.map(toCard).join('')+'</div></details>'; }
+    h+=`</div><div><div class="card-head"><h3>Recently decided</h3></div>`;
+    h+= hist.map(t=>`<div class="req"><div>${avatar(t.emp)}</div><div><div class="who"><b>${esc(nameOf(t.emp))}</b><span class="pill ${t.status==='approved'?'pill-green':'pill-gray'}">${t.status==='approved'?'Approved':'Declined'}</span></div><div class="meta">${toWhen(t)} · ${esc(t.reason)}</div>${t.decidedBy?`<div class="decided-by">${avatar(t.decidedBy,'sm')} ${t.status==='approved'?'Approved':'Declined'} by ${t.decidedBy===ME_MGR?'you':esc(firstOf(t.decidedBy))}${t.decidedAt?' · '+esc(t.decidedAt):''}</div>`:''}</div></div>`).join('') || `<div class="empty">Nothing yet.</div>`;
+    h+=`</div></div>`;
+  } else {
+    h+=`<div class="cols-2"><div><div class="card-head"><h3>Still needs coverage</h3><span class="muted" style="font-size:13px">Only people without a conflict are listed</span></div>`;
+    h+= cov.length? cov.map(covCard).join('') : `<div class="empty">Every shift is covered. 🎉</div>`;
+    if(covOther.length){ const ls=[...new Set(covOther.map(s=>s.loc))]; h+=otherNote(covOther.length,ls,covOther.length===1?'shift':'shifts')+covOther.map(covCard).join('')+'</div></details>'; }
+    h+=`</div><div><div class="card-head"><h3>Covered</h3></div>`;
+    h+= D.coverLog.slice().reverse().map(l=>{const s=shiftById(l.shiftId); if(!s||!(isOwner(ME_MGR)||canManage(s.loc))) return ''; return `<div class="req"><div>${avatar(l.to)}</div><div><div class="who"><b>${fmtDay(s.w,s.d)} · ${span(s)}</b><span class="pill pill-green">Covered</span></div><div class="meta">${ROLES[s.role]} · ${LOCS[s.loc].name}</div><div class="meta">${l.from?esc(firstOf(l.from))+' → ':'Open shift → '}<b>${esc(firstOf(l.to))}</b> · ${esc(l.when)}</div>${l.by?`<div class="decided-by">${l.by==='auto'?'Auto-approved':`${avatar(l.by,'sm')} Approved by ${l.by===ME_MGR?'you':esc(firstOf(l.by))}`}</div>`:''}</div></div>`;}).join('') || `<div class="empty">Nothing yet.</div>`;
+    h+=`</div></div>`;
+  }
+  $('#v-requests').innerHTML=h;
+}
+function toCard(t){
+  const cf=D.shifts.filter(s=>s.emp===t.emp&&toCovers(t,s)); const can=canDecideTO(t);
+  return `<div class="req ${cf.length?'attn':''}"><div>${avatar(t.emp,'lg')}</div><div>
+    <div class="who"><b>${esc(nameOf(t.emp))}</b><span class="pill ${t.status==='pending'?'pill-amber':t.status==='approved'?'pill-green':'pill-gray'}">${t.status[0].toUpperCase()+t.status.slice(1)}</span><span class="muted" style="font-size:12px">sent ${esc(t.sent)} · ${esc(locNames(toLocs(t)))}</span></div>
+    <div class="meta"><b>${toWhen(t)}</b> · “${esc(t.reason)}”</div>
+    ${cf.length?`<div class="warn">⚠ Scheduled ${cf.map(s=>`${(t.days||1)>1?DAYS[s.d]+' ':''}${span(s)} (${ROLES[s.role]}, ${LOCS[s.loc].name})`).join(', ')}</div>`:`<div class="ok">✓ Not scheduled ${t.s?'then':(t.days||1)>1?'on those days':'that day'} — no conflict</div>`}
+    ${!can&&t.status==='pending'?`<div class="actions"><span class="muted" style="font-size:12.5px">Waiting on ${esc(mgrNames(toLocs(t)))}</span><button class="btn btn-ghost btn-xs" data-viewweek="${t.w}">View on schedule</button></div>`:''}
+    <div class="actions" ${!can&&t.status==='pending'?'hidden':''}>${cf.length?`<button class="btn btn-primary btn-xs" data-approve="${t.id}" data-open="1">Approve &amp; open ${cf.length>1?cf.length+' shifts':'the shift'}</button>`:`<button class="btn btn-primary btn-xs" data-approve="${t.id}">Approve</button>`}
+      <button class="btn btn-ghost btn-xs" data-decline="${t.id}">Decline</button>
+      <button class="btn btn-ghost btn-xs" data-viewweek="${t.w}">View on schedule</button></div></div></div>`;
+}
+function covCard(s){
+  const c=s.cover; const av=availableFor(s); const can=canManage(s.loc);
+  const head=`<div class="who"><b>${fmtDay(s.w,s.d)} · ${span(s)}</b>${c.status==='needed'?`<span class="pill pill-amber">${s.emp?'Needs coverage':'Open shift'}</span>`:`<span class="pill pill-blue">Offer waiting on you</span>`}</div>
+    <div class="meta">${ROLES[s.role]} · ${LOCS[s.loc].name} · ${s.emp?`posted by ${esc(firstOf(s.emp))}`:'unassigned'}${c.target?` · <b>asked ${esc(firstOf(c.target))} to swap</b>`:''}</div>${c.note?`<div class="meta muted">“${esc(c.note)}”</div>`:''}`;
+  let act='';
+  if(c.status==='offered'){
+    act=`<div class="meta" style="margin-top:8px;display:flex;gap:8px;align-items:center">${avatar(c.offerBy,'sm')} <b>${esc(nameOf(c.offerBy))}</b> offered to take it</div>
+    <div class="actions"><button class="btn btn-primary btn-xs" data-approveoffer="${s.id}">Approve ${esc(firstOf(c.offerBy))}</button><button class="btn btn-ghost btn-xs" data-declineoffer="${s.id}">Decline offer</button><button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button></div>`;
+  } else {
+    act=`<div class="actions" style="align-items:center">${av.length?`<select class="btn btn-ghost btn-xs" data-assignsel="${s.id}" aria-label="Assign to">${av.map(i=>`<option value="${i}">${esc(PEOPLE[i].name)}</option>`).join('')}</select><button class="btn btn-primary btn-xs" data-assign="${s.id}">Assign</button>`:`<span class="muted" style="font-size:12.5px">No one is free without a conflict.</span>`}
+      <button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button>${s.emp?`<button class="btn btn-ghost btn-xs" data-cancelcover="${s.id}">Cancel request</button>`:''}</div>
+      <div class="meta muted" style="margin-top:6px">${av.length} available: ${av.map(i=>esc(firstOf(i))).join(', ')||'—'}</div>`;
+  }
+  if(!can) act=`<div class="actions"><span class="muted" style="font-size:12.5px">Waiting on ${esc(mgrNames([s.loc]))}</span><button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button></div>`;
+  return `<div class="req ${c.status==='needed'&&can?'attn':''}"><div>${avatar(s.emp,'lg')}</div><div>${head}${act}</div></div>`;
+}
+function approveTO(id, openShift){
+  const t=D.timeoff.find(x=>x.id===id); if(t.status!=='pending'){ toast(`Already ${t.status} by ${esc(firstOf(t.decidedBy))}`); render(); return; }
+  t.status='approved'; t.decidedBy=ME_MGR; t.decidedAt=nowStamp();
+  const co=[...new Set(toLocs(t).flatMap(mgrsFor))].filter(i=>i!==ME_MGR);
+  let n=0; if(openShift){ D.shifts.filter(s=>s.emp===t.emp&&toCovers(t,s)).forEach(s=>{ snapPub(s); s.cover={status:'needed',from:t.emp,note:`${firstOf(t.emp)} is off (approved time off)`}; s.emp=null; markDraft(s); n++; }); }
+  commit(); toast(`Approved ${esc(firstOf(t.emp))}’s time off${n?` · ${n} shift${n>1?'s':''} now open for pickup`:''}${co.length?` · ${esc(listNames(co.map(firstOf)))} can see it’s done`:''}`);
+}
+function assignCover(id, to){
+  const s=shiftById(id); D.coverLog.push({id:nid('c'),shiftId:id,from:s.cover.from||s.emp,to,when:nowStamp(),by:ME_MGR});
+  s.emp=to; delete s.cover; commit(); toast(`${esc(firstOf(to))} is now on ${fmtDay(s.w,s.d)} ${span(s)} · they’ve been notified`);
+}
+function openTOModal(id){
+  const t=D.timeoff.find(x=>x.id===id);
+  openModal(`${modalHead('Time-off request')}<div class="modal-body">${toCard(t).replace('class="req','class="req" style="border:0;padding:0" data-x="')}</div><div class="modal-foot"><button class="btn btn-ghost btn-sm" data-close>Close</button></div>`);
+  if(t.status!=='pending') $('#modal .actions').innerHTML=`<span class="pill ${t.status==='approved'?'pill-green':'pill-gray'}">${t.status==='approved'?'Approved':'Declined'}</span>`;
+}

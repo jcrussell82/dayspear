@@ -1,0 +1,120 @@
+
+/* ======================= MESSAGES ======================= */
+const teamCh = ()=>[{id:'team-all',name:'Everyone',sub:Object.keys(LOCS).length>1?'All locations':'Whole team'},...(Object.keys(LOCS).length>1?Object.keys(LOCS).map(l=>({id:'team-'+l,name:LOCS[l].name,sub:LOCS[l].name+' team'})):[])];
+function shiftThreads(forEmp){
+  return Object.keys(D.messages).filter(k=>k.startsWith('sh-')).map(k=>shiftById(k.slice(3))).filter(s=>s&&(!forEmp||s.emp===forEmp||s.loc==='dt'&&s.cover)).sort((a,b)=>a.w-b.w||a.d-b.d);
+}
+const dmKey=(a,b)=>'dm-'+[a,b].sort().join('-');
+const dmOther=(key,me)=>key.slice(3).split('-').find(x=>x!==me)||me;
+const dmList=me=>Object.keys(D.messages).filter(k=>k.startsWith('dm-')&&k.slice(3).split('-').includes(me)&&PEOPLE[dmOther(k,me)]);
+function upcomingBirthdays(){
+  if(!D.settings.messages.birthdays) return [];
+  const out=[]; for(const id of activeIds()){ const p=PEOPLE[id]; if(!p.bdayOptIn||!p.birthday) continue;
+    let x=new Date(TODAY.getFullYear(),p.birthday.m-1,p.birthday.d); if(x<TODAY) x=new Date(TODAY.getFullYear()+1,p.birthday.m-1,p.birthday.d);
+    const n=Math.round((x-TODAY)/864e5); if(n<=6) out.push({id,n,label:n===0?'today':n===1?'tomorrow':'on '+DAYS[(x.getDay()+6)%7]}); }
+  return out.sort((a,b)=>a.n-b.n);
+}
+const bdayHTML=()=>upcomingBirthdays().map(b=>`<div class="bday">🎂 <span><b>${esc(firstOf(b.id))}’s birthday is ${b.label}.</b> ${b.n===0?'Wish them a happy birthday!':'Say happy birthday when it comes.'}</span></div>`).join('');
+function chLabel(id,me=ME_MGR){
+  if(id==='ann') return 'Announcements';
+  if(id.startsWith('dm-')) return nameOf(dmOther(id,me));
+  const t=teamCh().find(c=>c.id===id); if(t) return id==='team-all'?'Everyone':t.name+' team';
+  const s=shiftById(id.slice(3)); return s?`${DAYS[s.d]} ${fmtNum(s.w,s.d)} · ${span(s)}`:'Shift chat';
+}
+function renderMessages(){
+  if(UI.channel.startsWith('sh-')&&!shiftById(UI.channel.slice(3))) UI.channel='ann';
+  if(UI.channel.startsWith('team-')&&!D.settings.messages.teamChat) UI.channel='ann';
+  if(UI.channel.startsWith('dm-')&&!D.messages[UI.channel]) D.messages[UI.channel]=[];
+  if(UI.channel.startsWith('sh-')&&!D.messages[UI.channel]) D.messages[UI.channel]=[];
+  D.unread[UI.channel]=0;
+  const chBtn=(id,glyph,name,sub,unread)=>`<button class="ch ${UI.channel===id?'on':''}" data-ch="${id}"><span class="hash">${glyph}</span><span><span class="nm">${esc(name)}</span><span class="sub">${esc(sub)}</span></span>${unread?`<span class="unread">${unread}</span>`:''}</button>`;
+  let list=`<div class="side-label">Announcements</div>${chBtn('ann',icon('megaphone',14),'Announcements','From managers · read receipts',0)}
+    ${D.settings.messages.teamChat?`<div class="side-label">Team chat</div>${teamCh().map(c=>chBtn(c.id,'#',c.name,c.sub,D.unread[c.id])).join('')}`:''}
+    <div class="side-label" style="display:flex;justify-content:space-between;align-items:center">Direct messages <button class="btn btn-ghost btn-xs" id="newDM" style="padding:3px 9px">${icon('plus',12)} New</button></div>${dmList(ME_MGR).map(k=>{const o=dmOther(k,ME_MGR); return chBtn(k,avatar(o,'sm'),PEOPLE[o].name+(isMgr(o)?' · manager':''),(D.messages[k].slice(-1)[0]||{}).text||'Private conversation',D.unread[k]);}).join('')}
+    <div class="side-label">Shift conversations</div>${shiftThreads().map(s=>chBtn('sh-'+s.id,icon('clock',14),`${DAYS[s.d]} ${fmtNum(s.w,s.d)} · ${span(s)}`,`${ROLES[s.role]} · ${LOCS[s.loc].name}${s.cover?' · needs coverage':''}`,0)).join('')}`;
+  let body='';
+  if(UI.channel==='ann'){
+    body=`<div class="thread-head"><span class="hash" style="width:34px;height:34px;border-radius:10px;background:var(--mist);display:grid;place-items:center;color:var(--green-ink)">${icon('megaphone',18)}</span><div><h3>Announcements</h3><span class="muted" style="font-size:12.5px">Managers post here, to everyone or one location. You can see who has read each one.</span></div></div>
+    <div class="thread-body">${bdayHTML()}${D.announcements.filter(a=>isOwner(ME_MGR)||!a.loc||canManage(a.loc)).sort((a,b)=>(b.pinned-a.pinned)).map(annCard).join('')}</div>
+    <form class="composer" id="annForm"><select id="annLoc" aria-label="Send to" class="ann-to">${isOwner(ME_MGR)||myLocs().length===Object.keys(LOCS).length?'<option value="">Everyone</option>':''}${myLocs().map(l=>`<option value="${l}">${esc(LOCS[l].name)} only</option>`).join('')}</select><input id="annText" placeholder="Write an announcement…" aria-label="Announcement" autocomplete="off"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);white-space:nowrap"><input type="checkbox" id="annPin"> Pin</label><button class="btn btn-primary btn-sm" type="submit">${icon('send',14)} Post</button></form>`;
+  } else {
+    const s=UI.channel.startsWith('sh-')?shiftById(UI.channel.slice(3)):null;
+    const msgs=D.messages[UI.channel]||[];
+    body=`<div class="thread-head"><span class="hash" style="width:34px;height:34px;border-radius:10px;background:var(--lav);display:grid;place-items:center;font-weight:700;color:var(--muted)">${s?icon('clock',18):UI.channel.startsWith('dm-')?avatar(dmOther(UI.channel,ME_MGR),'sm'):'#'}</span><div><h3>${esc(chLabel(UI.channel))}</h3><span class="muted" style="font-size:12.5px">${s?'Conversation about this shift — kept with the shift, not the team chat':UI.channel.startsWith('dm-')?'Private conversation · contact details stay private':'Casual team chat. Mute anytime.'}</span></div></div>
+    ${s?`<div class="shift-ctx">${avatar(s.emp,'sm')}<b>${esc(nameOf(s.emp))}</b> · ${ROLES[s.role]} · ${LOCS[s.loc].name} ${s.cover?`<span class="pill ${s.cover.status==='offered'?'pill-blue':'pill-amber'}">${s.cover.status==='offered'?'Offer waiting':'Needs coverage'}</span>`:'<span class="pill pill-green">Covered</span>'}<button class="btn btn-ghost btn-xs" style="margin-left:auto" data-editshift="${s.id}">Open shift</button></div>`:''}
+    <div class="thread-body" id="tbody">${msgs.map(m=>msgHTML(m,ME_MGR)).join('')||'<div class="empty">No messages yet. Say hi 👋</div>'}</div>
+    <form class="composer" id="msgForm"><input id="msgText" placeholder="Message ${esc(chLabel(UI.channel))}…" aria-label="Message" autocomplete="off"><button class="btn btn-primary btn-sm" type="submit">${icon('send',14)} Send</button></form>`;
+  }
+  $('#v-messages').innerHTML=`<div class="msg-layout"><nav class="ch-list" aria-label="Conversations">${list}</nav><div class="thread">${body}</div></div>`;
+  const tb=$('#tbody'); if(tb) tb.scrollTop=tb.scrollHeight;
+}
+const annAudience=a=>activeIds().filter(i=>!a.loc||PEOPLE[i].locs.includes(a.loc));
+const annFor=id=>D.announcements.filter(a=>!a.loc||(PEOPLE[id]&&PEOPLE[id].locs.includes(a.loc)));
+function annCard(a){
+  const aud=annAudience(a), seen=a.seen.filter(i=>aud.includes(i)).length, pct=aud.length?Math.round(seen/aud.length*100):0;
+  return `<article class="ann ${a.pinned?'pinned':''}">${a.pinned?'<span class="pill pill-green nodot">📌 Pinned</span> ':''}${a.loc?`<span class="pill pill-gray nodot">${icon('pin',11)} ${esc(LOCS[a.loc]?LOCS[a.loc].name:'')} only</span>`:''}<h4>${esc(a.title)}</h4><p style="color:var(--ink-2)">${esc(a.text)}</p>
+    <div class="seen">${avatar(a.from,'sm')} ${esc(firstOf(a.from))} · ${esc(a.when)} <span style="margin-left:auto">Read by ${seen} of ${aud.length}</span><span class="bar"><i style="width:${pct}%"></i></span></div></article>`;
+}
+function msgHTML(m,me){
+  if(m.from===me) return `<div class="m me"><div class="bub">${esc(m.text)}<div class="tm" style="margin:2px 0 0;text-align:right">${esc(m.when)}</div></div></div>`;
+  return `<div class="m">${avatar(m.from)}<div><div class="nm">${esc(firstOf(m.from))}<span class="tm">${esc(m.when)}</span></div><div class="bub" style="margin-top:3px">${esc(m.text)}</div></div></div>`;
+}
+
+/* ======================= TASKS ======================= */
+function assignTag(a){
+  if(a.type==='person') return `<span class="assign-tag person">${icon('users',11)} ${esc(firstOf(a.ref))}</span>`;
+  if(a.type==='location') return `<span class="assign-tag location">${icon('pin',11)} ${a.ref?LOCS[a.ref].name:esc(a.label)}</span>`;
+  const s=a.ref?shiftById(a.ref):null;
+  return `<span class="assign-tag at-shift">${icon('clock',11)} ${s?`${DAYS[s.d]} ${span(s)} shift · ${esc(firstOf(s.emp))}`:esc(a.label||'Shift')}</span>`;
+}
+function ring(p){ const r=16, c=2*Math.PI*r; return `<svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${r}" fill="none" style="stroke:var(--line-2)" stroke-width="5"/><circle cx="20" cy="20" r="${r}" fill="none" stroke="${p===1?'#5ecc5b':'#4d80f5'}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${c*p} ${c}" transform="rotate(-90 20 20)"/><text x="20" y="24" text-anchor="middle" font-size="10" font-weight="700" style="fill:var(--ink)">${Math.round(p*100)}%</text></svg>`; }
+const taskLocs=t=>{ const a=t.assign; if(a.type==='location') return [a.ref]; if(a.type==='shift'){ const s=shiftById(a.ref); return s?[s.loc]:[]; } return PEOPLE[a.ref]?PEOPLE[a.ref].locs:[]; };
+function renderTasks(){
+  const tab=UI.taskTab||'todos', L=UI.loc;
+  const cls=D.checklists.filter(c=>L==='all'||c.loc===L);
+  const clDone=cls.filter(c=>c.items.length&&c.items.every(i=>i.done)).length;
+  const inLoc=D.tasks.filter(t=>L==='all'||taskLocs(t).includes(L));
+  const openN=inLoc.filter(t=>t.status!=='done').length;
+  let h=`<div class="sched-bar"><div class="seg" role="group" aria-label="Location">${['all',...Object.keys(LOCS)].map(l=>`<button data-loc="${l}" class="${L===l?'on':''}">${l==='all'?'All locations':esc(LOCS[l].name)}</button>`).join('')}</div>
+    <div class="bar-right">${tab==='todos'?`<button class="btn btn-primary btn-sm" id="addTaskTop">${icon('plus')} New to-do</button>`:`<button class="btn btn-primary btn-sm" id="addChecklist">${icon('plus')} New checklist</button>`}</div></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="${tab==='todos'}" data-tasktab="todos" class="${tab==='todos'?'on':''}">To-dos <span class="pill pill-gray nodot">${openN} open</span></button>
+    <button role="tab" aria-selected="${tab==='checklists'}" data-tasktab="checklists" class="${tab==='checklists'?'on':''}">Checklists <span class="pill ${clDone===cls.length&&cls.length?'pill-green':'pill-gray'} nodot">${clDone} of ${cls.length} done today</span></button></div>`;
+  if(tab==='checklists'){
+    h+=`<p class="muted" style="font-size:13px;margin:-8px 0 16px">Routines that repeat with every shift they’re attached to. Progress is shared by everyone for today and resets at ${fmtT(D.settings.tasks.resetAt)}.</p><div class="cl-grid">`;
+    h+=cls.map(c=>{const done=c.items.filter(i=>i.done).length, p=c.items.length?done/c.items.length:0; const n=D.shifts.filter(s=>s.ck===c.id&&s.w===UI.week).length; const open=UI.openCl[c.id];
+      return `<div class="cl"><button class="cl-head" data-cl="${c.id}" aria-expanded="${!!open}">${ring(p)}<span style="flex:1"><b>${esc(c.name)} · ${esc(LOCS[c.loc].name)}</b><small>${c.assign.type==='shift'?`${esc(c.assign.label)} · on ${n} shift${n===1?'':'s'} ${weekRel(UI.week).toLowerCase()}`:esc(c.assign.label)}</small><span style="display:flex;gap:6px;margin-top:6px">${c.assign.type==='shift'?`<span class="assign-tag at-shift">${icon('clock',11)} Shift</span>`:`<span class="assign-tag location">${icon('pin',11)} Location</span>`}</span></span></button>
+      ${open?`<div class="cl-items">${c.items.map((it,i)=>`<label class="cl-item ${it.done?'done':''}"><input type="checkbox" data-clitem="${c.id}|${i}" ${it.done?'checked':''}><span>${esc(it.t)}</span></label>`).join('')}
+        <form class="cl-add" data-cladd="${c.id}" style="display:flex;gap:6px;margin-top:6px"><input placeholder="Add an item…" aria-label="Add checklist item" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px;background:var(--surface);color:var(--ink)"><button class="btn btn-ghost btn-xs" type="submit">Add</button></form></div>`:''}</div>`;}).join('')||'<div class="empty">No checklists here yet.</div>';
+    h+=`</div>`;
+  } else {
+    const ppl=activeIds().filter(i=>L==='all'||PEOPLE[i].locs.includes(L));
+    if(UI.taskFilter!=='all'&&!ppl.includes(UI.taskFilter.split(':')[1])) UI.taskFilter='all';
+    const ts=inLoc.filter(t=>{ if(UI.taskFilter==='all') return true; const v=UI.taskFilter.split(':')[1]; return (t.assign.type==='person'&&t.assign.ref===v)||(t.assign.type==='shift'&&shiftById(t.assign.ref)?.emp===v); });
+    const due=t=>t.due?`<span>${icon('cal',12)} ${fmtDay(t.due.w,t.due.d)}</span>`:'';
+    const STAT={todo:'To do',doing:'In progress',done:'Done'};
+    h+=`<div class="card todo-card" style="padding:0"><div class="card-head" style="padding:16px 16px 0"><span class="muted" style="font-size:13px">One-off jobs for a person, a shift or a location.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="btn btn-ghost btn-xs" id="taskFilter" aria-label="Filter by person">
+        <option value="all">Everyone</option>${ppl.map(i=>`<option value="person:${i}" ${UI.taskFilter==='person:'+i?'selected':''}>${esc(PEOPLE[i].first)}</option>`).join('')}</select>
+        <div class="seg"><button data-tv="list" class="${UI.taskView==='list'?'on':''}">${icon('list',13)} List</button><button data-tv="board" class="${UI.taskView==='board'?'on':''}">${icon('board',13)} Board</button></div></div></div>`;
+    if(UI.taskView==='list'){
+      const order=t=>({doing:0,todo:1,done:2})[t.status];
+      h+=`<div style="margin-top:10px">${ts.slice().sort((a,b)=>order(a)-order(b)).map(t=>`<div class="task-row ${t.status==='done'?'done':''}"><input type="checkbox" data-taskdone="${t.id}" ${t.status==='done'?'checked':''} aria-label="Mark done"><div class="row-open" data-edittask="${t.id}" role="button" tabindex="0" aria-label="Edit ${esc(t.title)}"><div class="tt">${esc(t.title)}</div><div class="tm">${assignTag(t.assign)} ${due(t)} ${subProg(t)}</div></div><span class="pill ${t.status==='done'?'pill-green':t.status==='doing'?'pill-blue':'pill-gray'}">${STAT[t.status]}</span></div>`).join('')||'<div class="empty" style="margin:16px">No to-dos here.</div>'}</div></div>`;
+    } else {
+      h+=`<div class="board" style="padding:12px 16px 16px">${['todo','doing','done'].map(st=>{const list=ts.filter(t=>t.status===st); return `<div class="col" data-col="${st}"><h4>${STAT[st]} <span class="muted">${list.length}</span></h4>${list.map(t=>`<div class="kcard" draggable="true" data-task="${t.id}" data-edittask="${t.id}" role="button" tabindex="0" aria-label="Edit ${esc(t.title)}"><div class="tt">${esc(t.title)}</div><div class="tm">${assignTag(t.assign)} ${due(t)} ${subProg(t)}</div><div class="kmove">${st!=='todo'?`<button class="btn btn-ghost btn-xs" data-taskmove="${t.id}|-1">Move back</button>`:''}${st!=='done'?`<button class="btn btn-ghost btn-xs" data-taskmove="${t.id}|1">Move forward</button>`:''}</div></div>`).join('')}</div>`;}).join('')}</div></div>`;
+    }
+  }
+  $('#v-tasks').innerHTML=h;
+}
+function openChecklistModal(){
+  openModal(`${modalHead('New checklist')}<form id="clForm"><div class="modal-body">
+    <div class="field"><label for="c-name">Name</label><input id="c-name" required placeholder="e.g. Mid-day reset"></div>
+    <div class="row-2"><div class="field"><label for="c-loc">Location</label><select id="c-loc">${Object.keys(LOCS).map(l=>`<option value="${l}">${LOCS[l].name}</option>`).join('')}</select></div>
+    <div class="field"><label for="c-type">Repeats with</label><select id="c-type"><option value="shift">Shifts I attach it to</option><option value="location">The location (anyone)</option></select></div></div>
+    <div class="field"><label for="c-items">Items, one per line</label><textarea id="c-items" rows="5" placeholder="Wipe tables&#10;Restock napkins&#10;Empty bins"></textarea></div>
+  </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-primary btn-sm" type="submit">Create checklist</button></div></form>`, m=>{
+    $('#clForm',m).onsubmit=e=>{ e.preventDefault(); const id=nid('cl'); const type=$('#c-type',m).value;
+      D.checklists.push({id,name:$('#c-name',m).value.trim(),loc:$('#c-loc',m).value,assign:{type,label:type==='shift'?'Attach to shifts in the schedule':'Anyone at '+LOCS[$('#c-loc',m).value].name},items:$('#c-items',m).value.split('\n').map(x=>x.trim()).filter(Boolean).map(t=>({t,done:false}))});
+      UI.openCl[id]=true; UI.taskTab='checklists'; closeModal(); commit(); toast(type==='shift'?'Checklist created — attach it from any shift':'Checklist created'); };
+  });
+}

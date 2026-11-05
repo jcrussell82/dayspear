@@ -1,0 +1,44 @@
+
+<!-- ======================= PLATFORM PREVIEW ======================= -->
+<div id="app" aria-label="DaySpear platform preview">
+  <aside class="sidebar">
+    <div class="brand"><a href="#home" title="DaySpear homepage" aria-label="DaySpear homepage"><img src="{{LOGOMARK}}" alt="DaySpear" width="34" height="36"></a></div>
+    <div class="biz"><div class="bz-logo" id="bizLogo">H</div><div><b id="bizName">Hearth &amp; Grain</b><small id="bizSub">Bakery · 2 locations</small></div></div>
+    <button class="nav-item" data-go="schedule"><svg width="20" height="20"><use href="#i-cal"/></svg>Schedule</button>
+    <button class="nav-item" data-go="requests"><svg width="20" height="20"><use href="#i-inbox"/></svg>Requests<span class="count" id="navReqCount"></span></button>
+    <button class="nav-item" data-go="messages"><svg width="20" height="20"><use href="#i-chat"/></svg>Messages<span class="count" id="navMsgCount" style="background:var(--blue);color:#fff"></span></button>
+    <button class="nav-item" data-go="tasks"><svg width="20" height="20"><use href="#i-check"/></svg>Tasks</button>
+    <button class="nav-item" data-go="settings"><svg width="20" height="20"><use href="#i-gear"/></svg>Settings</button>
+    <div class="side-label" id="previewLabel">Preview as</div>
+    <button class="nav-item" id="mayaPreview" data-go="employee"><img src="{{AV_e1}}" class="avatar sm" alt="">Maya (employee)</button>
+    <div id="actAs"></div>
+    <div class="side-foot">
+      <button class="nav-item signout" id="signOut"><svg width="20" height="20"><use href="#i-logout"/></svg>Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar" id="topbar"></div>
+    <div class="bill-banner" id="billBanner" role="status" hidden></div>
+    <section class="view" id="v-schedule"></section>
+    <section class="view" id="v-requests" hidden></section>
+    <section class="view" id="v-messages" hidden></section>
+    <section class="view" id="v-tasks" hidden></section>
+    <section class="view" id="v-employee" hidden></section>
+    <section class="view" id="v-settings" hidden></section>
+  </div>
+
+  <nav class="mob-nav" aria-label="App">
+    <button data-go="schedule"><svg width="22" height="22"><use href="#i-cal"/></svg>Schedule</button>
+    <button data-go="requests"><svg width="22" height="22"><use href="#i-inbox"/></svg>Requests</button>
+    <button data-go="messages"><svg width="22" height="22"><use href="#i-chat"/></svg>Messages</button>
+    <button data-go="tasks"><svg width="22" height="22"><use href="#i-check"/></svg>Tasks</button>
+    <button data-go="employee"><svg width="22" height="22"><use href="#i-phone"/></svg>Employee</button>
+    <button data-go="settings"><svg width="22" height="22"><use href="#i-gear"/></svg>Settings</button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal" id="modal"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="printArea" aria-hidden="true"></div>
+<div id="auth"></div>

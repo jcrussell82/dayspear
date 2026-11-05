@@ -1,0 +1,144 @@
+
+/* ======================= EMPLOYEE (MOBILE) VIEW ======================= */
+let ME='e1';
+const relDay=(w,d)=>{const diff=(7*w+d)-(7*todayW+todayD); return diff===0?'Today':diff===1?'Tomorrow':fmtDay(w,d);};
+function myUpcoming(){ return D.shifts.filter(s=>s.emp===ME&&!isPast(s.w,s.d)&&!s.draft).sort((a,b)=>a.w-b.w||a.d-b.d||toMin(a.s)-toMin(b.s)); }
+function pickups(){ return needsCover().filter(s=>s.emp!==ME&&s.cover.status==='needed'&&!s.draft&&PEOPLE[ME].locs.includes(s.loc)&&(!s.cover.target||s.cover.target===ME)&&!conflictsFor({...s,emp:ME},s.id).length); }
+function myTodos(){ const mine=new Set(D.shifts.filter(s=>s.emp===ME).map(s=>s.id)); return D.tasks.filter(t=>t.status!=='done'&&((t.assign.type==='person'&&t.assign.ref===ME)||(t.assign.type==='shift'&&mine.has(t.assign.ref))||(t.assign.type==='location'&&PEOPLE[ME].locs.includes(t.assign.ref)))); }
+function renderEmployee(){
+  if(!PEOPLE[ME]||PEOPLE[ME].status!=='active'){ $('#v-employee').innerHTML=`<div class="empty" style="max-width:520px;margin:40px auto;padding:40px 28px"><h3 style="font-size:20px;margin-bottom:8px">No employee to preview yet</h3><p style="margin-bottom:16px">Once someone accepts their invite, this is where you’d see DaySpear through their eyes. The sample bakery has an employee preview you can explore.</p><button class="btn btn-ghost btn-sm" data-go="schedule">Back to schedule</button></div>`; return; }
+  const tab=UI.emp.tab; const up=myUpcoming(); const pk=pickups(); const unreadAnn=annFor(ME).filter(a=>!a.seen.includes(ME)); const myMgrs=mgrNames(PEOPLE[ME].locs);
+  let body='', title='';
+  if(tab==='home'){
+    title=`Hi, ${esc(PEOPLE[ME].first)}`;
+    const n=up[0];
+    if(n){ const team=D.shifts.filter(s=>s.emp&&s.emp!==ME&&s.w===n.w&&s.d===n.d&&s.loc===n.loc&&overlaps(s,n)).map(s=>s.emp); const ck=n.ck?checklistById(n.ck):null;
+      body+=`<div class="next-shift"><small>Your next shift · ${relDay(n.w,n.d)}</small><h3>${span(n)}</h3><div class="where">${ROLES[n.role]} · ${LOCS[n.loc].name}</div>
+        ${team.length?`<div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;color:#c9d6c9">${team.slice(0,4).map(i=>avatar(i,'sm')).join('')} with ${team.slice(0,3).map(firstOf).join(', ')}</div>`:''}
+        ${n.cover?`<div style="margin-top:10px"><span class="pill pill-amber">${n.cover.status==='offered'?esc(firstOf(n.cover.offerBy))+' offered — waiting on manager':'Posted for coverage — you’re on it until someone is approved'}</span></div>`:''}
+        <div class="acts"><button class="btn btn-xs" data-ethread="${n.id}">${icon('chat',13)} Shift chat</button>${n.cover?'':`<button class="btn btn-xs" data-esheet="cant|${n.id}">Can’t make it</button>`}</div></div>`;
+      if(ck){ const done=ck.items.filter(i=>i.done).length; body+=`<div class="p-card"><h4>${esc(ck.name)} <span class="muted" style="font-weight:500;font-size:12px">${done}/${ck.items.length}</span></h4>${ck.items.map((it,i)=>`<label class="cl-item ${it.done?'done':''}" style="padding:7px 2px"><input type="checkbox" data-clitem="${ck.id}|${i}" ${it.done?'checked':''}><span>${esc(it.t)}</span></label>`).join('')}</div>`; }
+    } else body+=`<div class="p-card"><h4>No upcoming shifts</h4><p class="muted">Nothing published for you yet.</p></div>`;
+    if(unreadAnn.length){ const a=unreadAnn[0]; body+=`<div class="p-card" style="border-color:var(--mint)"><h4><span>${icon('megaphone',14)} ${esc(a.title)}</span></h4><p style="font-size:13.5px;color:var(--ink-2)">${esc(a.text)}</p><button class="btn btn-primary btn-xs" style="margin-top:10px" data-eread="${a.id}">Got it</button></div>`; }
+    body+=bdayHTML();
+    if(pk.length) body+=`<button class="p-card" data-etab="shifts" style="text-align:left;display:flex;gap:12px;align-items:center;background:var(--t-amber);border-color:var(--b-amber)"><span style="font-size:22px">🙋</span><span style="flex:1"><b style="display:block">${pk.length} open shift${pk.length>1?'s':''} you can pick up</b><span class="muted" style="font-size:12.5px">Earn extra hours this week</span></span></button>`;
+    const td=myTodos(); body+=`<div class="p-card"><h4>Your to-dos <span class="muted" style="font-weight:500;font-size:12px">${td.length}</span></h4>${td.map(t=>`<label class="cl-item" style="padding:7px 2px"><input type="checkbox" data-taskdone="${t.id}"><span>${esc(t.title)}<br><span style="font-size:11.5px">${assignTag(t.assign)} ${subProg(t)}</span></span></label>${(t.items||[]).length?`<div class="sub-items">${t.items.map((it,i)=>`<label class="cl-item ${it.done?'done':''}"><input type="checkbox" data-subitem="${t.id}|${i}" ${it.done?'checked':''}><span>${esc(it.t)}</span></label>`).join('')}</div>`:''}`).join('')||'<p class="muted" style="font-size:13px">Nothing for now.</p>'}</div>`;
+    body+=`<button class="btn btn-ghost" data-esheet="timeoff">${icon('sun',16)} Request time off</button>`;
+  }
+  if(tab==='schedule'){
+    title='My schedule';
+    body+=`<button class="btn btn-primary btn-sm" data-esheet="timeoff">${icon('sun',15)} Request time off</button>`;
+    for(const w of [0,1]){
+      const mine=D.shifts.filter(s=>s.emp===ME&&s.w===w&&!s.draft);
+      body+=`<div class="p-card"><h4>${weekRel(w)} · ${weekLabel(w)} <span class="muted" style="font-weight:500;font-size:12px">${fmtH(mine.reduce((a,s)=>a+hrs(s),0))}</span></h4>`;
+      for(let d=0;d<7;d++){ const ss=mine.filter(s=>s.d===d); const to=timeOffFor(ME,w,d); const past=isPast(w,d);
+        if(!ss.length&&!to) continue;
+        body+= to&&!ss.length ? `<div class="p-shift p-off" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">Time off</div><div class="ss">${esc(to.reason)}</div></div><span class="pill ${to.status==='approved'?'pill-green':'pill-amber'}">${to.status==='approved'?'Approved':'Pending'}</span></div>`
+          : ss.map(s=>`<div class="p-shift" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}</div></div>${s.cover?`<span class="pill pill-amber">${s.cover.status==='offered'?'Offer pending':'Posted'}</span>`:isToday(w,d)?'<span class="pill pill-green">Today</span>':''}</div>`).join('');
+      }
+      if(!mine.length) body+=`<p class="muted" style="font-size:13px">Not published yet.</p>`;
+      body+=`</div>`;
+    }
+  }
+  if(tab==='shifts'){
+    title='Shifts';
+    body+=`<div class="p-card"><h4>Open shifts you can pick up</h4>${pk.map(s=>`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}${s.cover.target===ME?` · <b style="color:var(--blue-ink)">${esc(firstOf(s.emp))} asked you</b>`:s.emp?` · from ${esc(firstOf(s.emp))}`:''}</div></div><button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button></div>`).join('')||'<p class="muted" style="font-size:13px">Nothing open that fits your schedule right now.</p>'}
+      <p class="muted" style="font-size:11.5px;margin-top:8px">Only shifts at your locations that don’t clash with your schedule or time off are shown.</p></div>`;
+    const mineCov=D.shifts.filter(s=>s.cover&&(s.cover.offerBy===ME||(s.cover.from===ME&&s.emp===ME)));
+    const won=D.coverLog.filter(l=>l.to===ME||l.from===ME);
+    body+=`<div class="p-card"><h4>Your swap &amp; coverage requests</h4>${mineCov.map(s=>`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${s.cover.offerBy===ME?'You offered to cover':s.cover.target?'You asked '+esc(firstOf(s.cover.target)):'You asked for coverage'}</div></div><span class="pill ${s.cover.status==='offered'?'pill-blue':'pill-amber'}">${s.cover.status==='offered'?'Waiting on manager':'Still needed'}</span></div>`).join('')}
+      ${won.map(l=>{const s=shiftById(l.shiftId); return s?`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${l.to===ME?'You picked this up':'Covered by '+esc(firstOf(l.to))}</div></div><span class="pill pill-green">Covered</span></div>`:'';}).join('')}
+      ${!mineCov.length&&!won.length?'<p class="muted" style="font-size:13px">No requests yet.</p>':''}</div>`;
+    const myTO=D.timeoff.filter(t=>t.emp===ME).sort((a,b)=>b.w-a.w||b.d-a.d);
+    body+=`<div class="p-card"><h4>Time-off requests <button class="btn btn-ghost btn-xs" data-esheet="timeoff">${icon('plus',12)} New</button></h4>${myTO.map(t=>`<div class="p-shift p-off"><div class="p-date"><small>${DAYS[t.d]}</small><b>${fmtNum(t.w,t.d)}</b></div><div><div class="tt">All day</div><div class="ss">${esc(t.reason)}</div></div><span class="pill ${t.status==='approved'?'pill-green':t.status==='pending'?'pill-amber':'pill-gray'}">${t.status[0].toUpperCase()+t.status.slice(1)}</span></div>`).join('')||'<p class="muted" style="font-size:13px">None yet.</p>'}</div>`;
+  }
+  if(tab==='chat'){
+    const th=UI.emp.thread;
+    if(!th){
+      title='Messages';
+      const row=(id,glyph,name,sub,badge)=>`<button class="ch" data-ethread="${id}" style="padding:11px 6px"><span class="hash">${glyph}</span><span><span class="nm">${esc(name)}</span><span class="sub">${esc(sub)}</span></span>${badge?`<span class="unread">${badge}</span>`:''}</button>`;
+      body+=`<div class="p-card" style="padding:6px 8px">${row('ann',icon('megaphone',14),'Announcements','From '+myMgrs,unreadAnn.length)}${D.settings.messages.teamChat?(Object.keys(LOCS).length>1?row('team-'+PEOPLE[ME].locs[0],'#',(LOCS[PEOPLE[ME].locs[0]]||{}).name+' team',((D.messages['team-'+PEOPLE[ME].locs[0]]||[]).slice(-1)[0]||{}).text||''):'')+row('team-all','#','Everyone',((D.messages['team-all']||[]).slice(-1)[0]||{}).text||''):''}${dmList(ME).map(k=>row(k,avatar(dmOther(k,ME),'sm'),nameOf(dmOther(k,ME)),(D.messages[k].slice(-1)[0]||{}).text||'')).join('')}</div>
+        <div class="p-card" style="padding:6px 8px"><div class="side-label" style="padding:8px 6px 4px">Your shift conversations</div>${shiftThreads(ME).map(s=>row(s.id,icon('clock',14),`${DAYS[s.d]} ${fmtNum(s.w,s.d)} · ${span(s)}`,`${ROLES[s.role]} · ${LOCS[s.loc].name}`)).join('')||'<p class="muted" style="font-size:13px;padding:6px">None yet.</p>'}</div>
+        <div class="p-card"><h4>Message a teammate</h4>${[...new Set([...PEOPLE[ME].locs.flatMap(mgrsFor),...mgrIds().filter(isOwner),...activeIds()])].filter(i=>i!==ME).map(i=>{const q=PEOPLE[i]; const ph=D.settings.messages.phoneSharing&&q.sharePhone; return `<div class="dir-row">${avatar(i,'sm')}<span><b>${esc(q.name)}</b><small>${isMgr(i)?esc(mgrLabel(i)):esc(ROLES[q.role]||'')+' · '+q.locs.map(l=>LOCS[l]?LOCS[l].name:'').join(', ')}${ph?' · '+esc(q.phone):''}</small></span><button class="btn btn-ghost btn-xs" data-ethread="${dmKey(ME,i)}">Message</button></div>`;}).join('')}<p class="muted" style="font-size:11.5px;margin-top:8px">${D.settings.messages.phoneSharing?'Numbers appear only for teammates who chose to share them.':'Phone numbers are private. Message teammates here instead.'}</p></div>`;
+    } else if(th==='ann'){
+      title='Announcements';
+      body+=`<button class="btn btn-ghost btn-xs" data-eback style="justify-self:start">Back to messages</button>${annFor(ME).map(a=>`<div class="p-card">${a.pinned?'<span class="pill pill-green nodot">📌 Pinned</span>':''}<h4 style="margin-top:6px">${esc(a.title)}</h4><p style="font-size:13.5px;color:var(--ink-2)">${esc(a.text)}</p>${a.seen.includes(ME)?'<p class="muted" style="font-size:12px;margin-top:8px">✓ Read</p>':`<button class="btn btn-primary btn-xs" style="margin-top:10px" data-eread="${a.id}">Got it</button>`}</div>`).join('')}`;
+    } else {
+      const key=(th.startsWith('team-')||th.startsWith('dm-'))?th:'sh-'+th; const s=key.startsWith('sh-')?shiftById(th):null;
+      if(!D.messages[key]) D.messages[key]=[];
+      title=s?`${DAYS[s.d]} ${span(s)}`:chLabel(key,ME);
+      body+=`<button class="btn btn-ghost btn-xs" data-eback style="justify-self:start">Back to messages</button>${s?`<div class="shift-ctx" style="margin:0">${ROLES[s.role]} · ${LOCS[s.loc].name} · ${esc(nameOf(s.emp))}</div>`:''}
+        <div style="display:flex;flex-direction:column;gap:12px">${D.messages[key].map(m=>msgHTML(m,ME)).join('')||'<p class="muted">No messages yet.</p>'}</div>`;
+    }
+  }
+  if(tab==='profile'){ title='Profile'; body+=profileForm(ME,'self')+`<button type="button" class="btn btn-ghost" id="signOut2" style="margin-top:4px">${icon('logout',15)} Sign out</button>`; }
+  const showComposer = tab==='chat'&&UI.emp.thread&&UI.emp.thread!=='ann';
+  const tabs=[['home','home','Home'],['schedule','cal','Schedule'],['shifts','swap','Shifts'],['chat','chat','Chat'],['profile','user','Profile']];
+  $('#v-employee').innerHTML=`<div class="emp-stage">
+    <div class="emp-notes"><span class="eyebrow">Employee experience</span><h2>Everything Maya needs, nothing she doesn’t</h2>
+      <p>This is the phone view. It shares data with the manager preview—try it both ways:</p>
+      <ul><li>Request time off here, then see it appear as <b>pending on the schedule</b>.</li><li>Tap <b>I can take it</b> on an open shift, then approve it under Requests.</li><li>Tick off her espresso bar checklist before the shift.</li></ul>
+      <p style="margin-top:14px"><button class="btn btn-ghost btn-sm" data-go="schedule">Back to manager view</button></p></div>
+    <div class="phone"><div class="phone-screen ${isDark(PEOPLE[ME].theme)?'dark':''}">
+      <div class="p-status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="p-head"><button class="sg-name" data-etab="profile" aria-label="Your profile">${avatar(ME)}</button><h2>${esc(title)}</h2><button class="icon-btn" data-etab="chat" aria-label="Notifications">${icon('bell',18)}</button></div>
+      <div class="p-body" id="pbody">${body}</div>
+      ${showComposer?`<form class="composer" id="eMsgForm" style="background:var(--surface)"><input id="eMsgText" placeholder="Message…" aria-label="Message" autocomplete="off"><button class="btn btn-primary btn-sm" type="submit" aria-label="Send">${icon('send',14)}</button></form>`:''}
+      <nav class="p-tabs">${tabs.map(([id,ic,l])=>`<button data-etab="${id}" class="${tab===id?'on':''}">${icon(ic,22)}${l}${id==='shifts'&&pk.length?`<span class="badge">${pk.length}</span>`:''}${id==='chat'&&unreadAnn.length?`<span class="badge">${unreadAnn.length}</span>`:''}</button>`).join('')}</nav>
+      <div class="sheet" id="esheet"><div class="sheet-panel" id="esheetPanel"></div></div>
+    </div></div></div>`;
+  if(showComposer){ const pb=$('#pbody'); pb.scrollTop=pb.scrollHeight; }
+}
+function openSheet(kind, arg){
+  const sh=$('#esheet'), p=$('#esheetPanel');
+  if(kind==='timeoff'){
+    const R=D.settings.requests; const opts=[]; for(let i=1;i<=28;i++){ const g=7*todayW+todayD+i; opts.push({w:Math.floor(g/7),d:g%7}); }
+    const types=[['day','One day']]; if(R.partialDay) types.push(['part','Part of a day']); if(R.multiDay) types.push(['range','Several days']);
+    const dayOpts=()=>opts.map(o=>`<option value="${o.w}|${o.d}">${fmtDay(o.w,o.d)}</option>`).join('');
+    p.innerHTML=`<div class="grab"></div><h3>Request time off</h3><form id="toForm" style="display:grid;gap:12px">
+      ${types.length>1?`<div class="ts-seg" role="group" aria-label="How long">${types.map(([k,l],i)=>`<button type="button" data-totype="${k}" class="${i===0?'on':''}">${l}</button>`).join('')}</div>`:''}
+      <div class="row-2"><div class="field"><label for="to-day" id="to-day-l">Day</label><select id="to-day">${dayOpts()}</select></div>
+        <div class="field" id="to-end-f" hidden><label for="to-end">Last day</label><select id="to-end">${dayOpts()}</select></div></div>
+      <div class="row-2" id="to-times" hidden><div class="field"><label for="to-s">From</label><input id="to-s" type="time" value="13:00" step="900"></div><div class="field"><label for="to-e">Until</label><input id="to-e" type="time" value="17:00" step="900"></div></div>
+      <div class="field"><label for="to-why">Note for your manager <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="to-why" rows="2" placeholder="e.g. Doctor’s appointment"></textarea></div>
+      <div id="to-warn" aria-live="polite"></div>
+      <button class="btn btn-primary" type="submit">Send request</button><button class="btn btn-ghost" type="button" data-eclose>Cancel</button></form>`;
+    let type='day';
+    const read=()=>{ const [w,d]=$('#to-day').value.split('|').map(Number); let days=1, s=null, e=null;
+      if(type==='range'){ const [w2,d2]=$('#to-end').value.split('|').map(Number); days=gi(w2,d2)-gi(w,d)+1; }
+      if(type==='part'){ s=$('#to-s').value; e=$('#to-e').value; }
+      return {emp:ME,w,d,days,s,e}; };
+    const warn=()=>{ const r=read(); let h=''; let ok=true;
+      if(type==='range'&&r.days<2){ h+=`<div class="alert red">Pick a last day after the first day.</div>`; ok=false; r.days=1; }
+      if(type==='part'&&!(r.s<r.e)){ h+=`<div class="alert red">“Until” must be after “From”.</div>`; ok=false; }
+      const clash=D.timeoff.find(t=>t.emp===ME&&t.status!=='declined'&&[...Array(r.days)].some((_,i)=>{const g=gi(r.w,r.d)+i; return inTO(t,Math.floor(g/7),g%7);}));
+      if(clash){ h+=`<div class="alert amber">You already have a ${clash.status} request that overlaps: ${toWhen(clash)}.</div>`; ok=false; }
+      const ss=D.shifts.filter(s=>s.emp===ME&&!s.draft&&toCovers(r,s));
+      h+= ss.length?`<div class="alert amber">You’re scheduled ${ss.map(s=>DAYS[s.d]+' '+span(s)).join(', ')}. ${esc(mgrNames(PEOPLE[ME].locs))} will see this before approving.</div>`:`<div class="alert green">You’re not scheduled ${type==='range'?'on those days':'then'}.</div>`;
+      if(gi(r.w,r.d)-gi(todayW,todayD)<R.noticeDays) h+=`<div class="alert amber">That’s less than ${R.noticeDays} days’ notice. You can still ask; it just may be harder to cover.</div>`;
+      $('#to-warn').innerHTML=h; return ok; };
+    $$('[data-totype]',p).forEach(b=>b.onclick=()=>{ type=b.dataset.totype; $$('[data-totype]',p).forEach(x=>x.classList.toggle('on',x===b)); $('#to-end-f').hidden=type!=='range'; $('#to-times').hidden=type!=='part'; $('#to-day-l').textContent=type==='range'?'First day':'Day'; if(type==='range') $('#to-end').selectedIndex=Math.min($('#to-day').selectedIndex+2,opts.length-1); warn(); });
+    $$('select,input',p).forEach(el=>el.addEventListener('change',warn)); warn();
+    $('#toForm').onsubmit=ev=>{ ev.preventDefault(); if(!warn()) return; const r=read(); const rec={id:nid('t'),emp:ME,w:r.w,d:r.d,status:'pending',reason:$('#to-why').value.trim()||'Personal',sent:'Just now'};
+      if(r.days>1) rec.days=r.days; if(r.s){ rec.s=r.s; rec.e=r.e; }
+      D.timeoff.push(rec); closeSheet(); commit(); toast(`Request sent to ${esc(mgrNames(PEOPLE[ME].locs))} · shows as pending on the schedule`); };
+  }
+  if(kind==='cant'){
+    const s=shiftById(arg); const R=D.settings.requests; const mates=availableFor(s);
+    p.innerHTML=`<div class="grab"></div><h3>Can’t make ${relDay(s.w,s.d)==='Today'?'today’s':DAYS[s.d]+'’s'} shift?</h3><p class="muted" style="font-size:13.5px">${fmtDay(s.w,s.d)} · ${span(s)} · ${ROLES[s.role]}</p>
+      <form id="cantForm" style="display:grid;gap:12px">
+      ${R.namedSwaps?`<div class="ts-seg" role="group" aria-label="Who to ask"><button type="button" class="on" data-cwho="any">Anyone eligible</button><button type="button" data-cwho="named">A specific teammate</button></div>
+      <div class="field" id="cant-mate-f" hidden><label for="cant-mate">Ask</label><select id="cant-mate">${mates.map(i=>`<option value="${i}">${esc(PEOPLE[i].name)}</option>`).join('')||'<option value="">No one is free then</option>'}</select><span class="muted" style="font-size:12px">Only teammates without a conflict are listed.</span></div>`:''}
+      <div class="field"><label for="cant-why">Note <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="cant-why" rows="2" placeholder="e.g. Car trouble, happy to swap"></textarea></div>
+      <div class="alert amber">You stay on this shift until ${R.autoApprove?'someone takes it':esc(mgrNames([s.loc]))+' approves someone to cover it'}.</div>
+      <button class="btn btn-primary" type="submit">Ask for coverage</button><button class="btn btn-ghost" type="button" data-eclose>Cancel</button></form>`;
+    let who='any';
+    $$('[data-cwho]',p).forEach(b=>b.onclick=()=>{ who=b.dataset.cwho; $$('[data-cwho]',p).forEach(x=>x.classList.toggle('on',x===b)); $('#cant-mate-f').hidden=who!=='named'; });
+    $('#cantForm').onsubmit=ev=>{ ev.preventDefault(); const target=who==='named'?$('#cant-mate').value:''; if(who==='named'&&!target) return;
+      s.cover={status:'needed',from:ME,note:$('#cant-why').value.trim()}; if(target) s.cover.target=target;
+      const k='sh-'+s.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:(target?`@${firstOf(target)} could you take this one?`:'I can’t make this one. Can anyone cover?')+(s.cover.note?' — '+s.cover.note:''),when:nowStamp()});
+      closeSheet(); commit(); toast(target?`Asked ${esc(firstOf(target))} · ${esc(mgrNames([s.loc]))} can see it in Requests`:`Posted · eligible teammates and ${esc(mgrNames([s.loc]))} were notified`); };
+  }
+  sh.classList.add('open'); const f=p.querySelector('select,textarea'); f&&f.focus();
+}
+function closeSheet(){ const s=$('#esheet'); s&&s.classList.remove('open'); }

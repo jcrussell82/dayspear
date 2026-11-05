@@ -1,0 +1,198 @@
+
+/* ======================= TOP BAR ======================= */
+const TITLES={schedule:'Schedule',requests:'Requests',messages:'Messages',tasks:'Tasks',employee:'Employee view',settings:'Settings'};
+function renderTopbar(){
+  $('#topbar').innerHTML=`<h1>${TITLES[UI.view]}</h1><button class="me-card top" id="meCard" type="button" data-myprofile aria-label="Your profile and preferences, ${esc(nameOf(ME_MGR))}">${avatar(ME_MGR)}<span class="me-text"><b>${esc(nameOf(ME_MGR))}</b><small>${esc(mgrLabel(ME_MGR))}</small></span></button>`;
+}
+function schedControls(){
+  const n=draftCount(UI.week); const others=[...new Set(draftsIn(UI.week,myLocs()).filter(s=>s.draftBy&&s.draftBy!==ME_MGR).map(s=>s.draftBy))];
+  const partial=myLocs().length<Object.keys(LOCS).length;
+  let pub = n
+    ? `${others.length?`<span class="pub-note">${draftsIn(UI.week,myLocs()).filter(s=>s.draftBy&&s.draftBy!==ME_MGR).length} by ${esc(listNames(others.map(firstOf)))}</span>`:''}<button class="btn btn-green btn-sm" id="publishBtn" title="Publishes ${esc(locNames(myLocs()))}">Publish ${n} change${n>1?'s':''}${partial?' · '+esc(locNames(myLocs())):''}</button>`
+    : myLocs().some(l=>(D.published[UI.week]||{})[l]) ? `<span class="pub-ok">${icon('check',16)} Published</span>` : `<span class="pub-note">Nothing to publish yet</span>`;
+  pub=`<button class="btn btn-ghost btn-sm" id="printBtn" title="Print a copy for the wall, or save as PDF">${icon('printer',15)} Print</button>`+pub;
+  return `<div class="seg" role="group" aria-label="Location">${['all',...Object.keys(LOCS)].map(l=>`<button data-loc="${l}" class="${UI.loc===l?'on':''}">${l==='all'?'All locations':esc(LOCS[l].name)}</button>`).join('')}</div>
+    <div class="bar-right">${pub}</div>`;
+}
+const rc=r=>'rc'+(Math.max(0,Object.keys(ROLES).indexOf(r))%4);
+const RC_SW=['background:var(--t-blue);box-shadow:inset 3px 0 0 #4d80f5','background:var(--t-sky);box-shadow:inset 3px 0 0 #72aef9','background:var(--mist);box-shadow:inset 3px 0 0 #5ecc5b','background:var(--t-bake);box-shadow:inset 3px 0 0 #0e210e'];
+const legendHTML=()=>`<div class="legend">${Object.keys(ROLES).map((r,i)=>`<span><i style="${RC_SW[i%4]}"></i>${esc(ROLES[r])}</span>`).join('')}
+      <span><i style="border:1.5px dashed var(--amber);background:var(--t-amber)"></i>Time off</span>
+      <span><i style="outline:1.5px dashed var(--line-strong);outline-offset:-1.5px"></i>Draft</span></div>`;
+function groupMeta(w,l){
+  const p=(D.published[w]||{})[l], mg=mgrsFor(l), dn=draftCount(w,[l]);
+  return `<span class="grp-meta">${mg.length?`Managed by ${esc(listNames(mg.map(firstOf)))}`:'No manager yet'} · ${p?`Published ${esc(p.when)} by ${esc(firstOf(p.by))}`:'Not published yet'}${dn?` · <span class="grp-draft">${dn} unpublished</span>`:''}</span>`;
+}
+
+/* ======================= SCHEDULE ======================= */
+function renderSchedule(){
+  const w=UI.week, loc=UI.loc, ws=shiftsIn(w);
+  const people=EMP_IDS.filter(id=>loc==='all'||PEOPLE[id].locs.includes(loc));
+  const totalH=ws.filter(s=>s.emp).reduce((a,s)=>a+hrs(s),0);
+  const cover=needsCover().filter(s=>s.w===w&&(loc==='all'||s.loc===loc));
+  const pto=pendingTO().filter(t=>t.w===w&&people.includes(t.emp));
+  const working=new Set(ws.filter(s=>s.emp).map(s=>s.emp)).size;
+
+  let h=`<div class="sched-bar">
+    <div class="week-nav"><button class="icon-btn" data-week="-1" aria-label="Previous week">${icon('left')}</button>
+      <div class="label">${weekLabel(w)}<div class="muted" style="font-size:12px;font-weight:500;font-family:var(--font-body)">${weekRel(w)}</div></div>
+      <button class="icon-btn" data-week="1" aria-label="Next week">${icon('right')}</button></div>
+    ${w!==1?`<button class="btn btn-ghost btn-xs" data-week-go="1">Jump to next week</button>`:''}
+    ${schedControls()}</div>
+  <div class="stat-strip">
+    <div class="stat-card"><span class="dot" style="background:var(--mist);color:var(--green-ink)">${icon('clock',18)}</span><div><b>${fmtH(totalH)}</b><small>scheduled this week</small></div></div>
+    <div class="stat-card"><span class="dot" style="background:var(--t-blue);color:var(--blue)">${icon('users',18)}</span><div><b>${working} of ${people.length}</b><small>people working</small></div></div>
+    <button class="stat-card" data-goreq="coverage"><span class="dot" style="background:var(--t-amber);color:var(--amber-ink)">${icon('swap',18)}</span><div><b>${cover.length}</b><small>${cover.length===1?'shift needs':'shifts need'} coverage</small></div></button>
+    <button class="stat-card" data-goreq="timeoff"><span class="dot" style="background:var(--t-amber);color:var(--amber-ink)">${icon('sun',18)}</span><div><b>${pto.length}</b><small>time-off ${pto.length===1?'request':'requests'} pending</small></div></button>
+  </div>`;
+
+  if(!ws.length && shiftsIn(w-1).some(s=>canManage(s.loc))){
+    const prev=shiftsIn(w-1);
+    h+=`<div class="empty" style="padding:56px 24px"><h3 style="font-size:20px;margin-bottom:8px">Nothing scheduled for ${weekLabel(w)} yet</h3>
+      <p style="margin-bottom:18px">Most weeks look a lot like the last one. Start from it, then adjust.</p>
+      ${prev.filter(s=>canManage(s.loc)).length?`<button class="btn btn-primary" id="copyWeek">Copy last week (${prev.filter(s=>canManage(s.loc)).length} shifts)</button>`:''}
+      <button class="btn btn-ghost" data-addcell="${people[0]||''}|0">Add a shift</button></div>`;
+    $('#v-schedule').innerHTML=h; return;
+  }
+
+  h+=`<div class="grid-wrap"><div class="sgrid" role="grid" aria-label="Weekly schedule">`;
+  h+=`<div class="sg-corner">Team</div>`;
+  for(let d=0;d<7;d++){
+    const dh=ws.filter(s=>s.d===d&&s.emp).reduce((a,s)=>a+hrs(s),0);
+    const p=pto.filter(t=>t.d===d).length;
+    h+=`<div class="sg-head ${isToday(w,d)?'today':''}"><b>${DAYS[d]} ${fmtNum(w,d)}</b><span class="hrs">${fmtH(dh)}${p?` · <span style="color:var(--amber-ink);font-weight:600">${p} time-off req.</span>`:''}</span></div>`;
+  }
+  // Open shifts row
+  h+=`<div class="sg-group">Open shifts</div><div class="sg-open" style="display:contents">`;
+  h+=`<div class="sg-person">${avatar(null)}<div><b>Unassigned</b><small>Anyone eligible can pick up</small></div></div>`;
+  for(let d=0;d<7;d++) h+=cell(null,w,d,ws);
+  h+=`</div>`;
+  // People grouped by primary location
+  const groups = loc==='all' ? Object.keys(LOCS) : [loc];
+  for(const g of groups){
+    const list=people.filter(id=>(loc==='all'?PEOPLE[id].locs[0]===g:true));
+    h+=`<div class="sg-group"><span>${esc(LOCS[g].name)}</span>${groupMeta(w,g)}</div>`;
+    for(const id of list){
+      const p=PEOPLE[id]; const mine=ws.filter(s=>s.emp===id); const tot=mine.reduce((a,s)=>a+hrs(s),0);
+      h+=`<div class="sg-person"><button class="sg-name" data-profile="${id}" aria-label="Open ${esc(p.name)}’s profile">${avatar(id)}<span><b>${esc(p.name)}</b><small>${esc(ROLES[p.role]||'')}${p.locs.length>1?' · '+p.locs.length+' locations':''}${p.status==='invited'?'<span class="tag-invited">Invited</span>':''}</small></span></button><span class="hours ${tot>D.settings.sched.otHours?'over':''}" title="${tot>D.settings.sched.otHours?'Over the '+D.settings.sched.otHours+'h overtime threshold':''}">${fmtH(tot)}</span></div>`;
+      for(let d=0;d<7;d++) h+=cell(id,w,d,ws);
+    }
+  }
+  h+=`</div></div><div class="grid-foot"><p class="muted">Tip: click an empty slot to add a shift, drag a shift to move it, click a shift to edit it.</p>${legendHTML()}</div>`;
+  $('#v-schedule').innerHTML=h;
+}
+function cell(emp,w,d,ws){
+  const list=ws.filter(s=>s.emp===emp&&s.d===d).sort((a,b)=>toMin(a.s)-toMin(b.s));
+  const to=emp?timeOffFor(emp,w,d):null;
+  let inner='';
+  if(to) inner+=`<button class="to-block ${to.status==='approved'?'approved':''}" data-to="${to.id}">${to.status==='pending'?'Time off requested':'Off — approved'}${to.s?` · ${fmtT(to.s)}–${fmtT(to.e)}`:''}<small>${esc(to.reason)}</small></button>`;
+  for(const s of list){
+    const cf=conflictsFor(s,s.id).filter(c=>c.kind!=='loc');
+    const c=s.cover; const ckl=s.ck?checklistById(s.ck):null;
+    let flag='';
+    if(c&&c.status==='needed') flag=`<span class="flag" style="color:var(--amber-ink)">${s.emp?'Needs coverage':'Open'}</span>`;
+    if(c&&c.status==='offered') flag=`<span class="flag" style="color:var(--blue-ink)">${esc(firstOf(c.offerBy))} offered</span>`;
+    inner+=`<button class="shift ${rc(s.role)} ${s.draft?'draft':''} ${c&&c.status==='needed'?'needs':''} ${canManage(s.loc)?'':'ro'}" draggable="${canManage(s.loc)}" data-shift="${s.id}" aria-label="${esc(nameOf(s.emp))}, ${span(s)}, ${ROLES[s.role]}, ${LOCS[s.loc].name}">
+      <div class="t"><span>${span(s)}</span>${UI.loc==='all'?`<span class="loc-tag" style="font-size:10px;font-weight:600;color:var(--muted)">${LOCS[s.loc].short}</span>`:''}</div>
+      <div class="r">${ROLES[s.role]}</div>
+      ${ckl?`<div class="ck">${icon('check',11)} ${esc(ckl.name)}</div>`:''}
+      ${flag}${cf.length?`<span class="conflict-badge" title="Conflicts with time off or another shift">!</span>`:''}</button>`;
+  }
+  return `<div class="sg-cell ${isToday(w,d)?'today':''} ${list.length||to?'has':''}" data-cell="${emp||''}|${d}">${inner}${(!emp||PEOPLE[emp].locs.some(canManage))?`<button class="add" data-addcell="${emp||''}|${d}" aria-label="Add shift for ${esc(nameOf(emp))} on ${fmtDay(w,d)}">+ Add</button>`:''}</div>`;
+}
+
+/* ---------- Shift editor ---------- */
+function openShiftModal(id, preset={}){
+  const ex=id?shiftById(id):null;
+  const s=ex?{...ex}:{w:UI.week,d:preset.d??0,emp:preset.emp??null,s:'07:00',e:'13:00',role:preset.emp?PEOPLE[preset.emp].role:'barista',loc:(preset.emp&&PEOPLE[preset.emp].locs.find(canManage))||(UI.loc!=='all'&&canManage(UI.loc)?UI.loc:myLocs()[0]),ck:null};
+  const ro=!!ex&&!canManage(ex.loc);
+  const opt=(v,l,sel)=>`<option value="${v}" ${sel?'selected':''}>${l}</option>`;
+  openModal(`${modalHead(ex?'Edit shift':'Add shift')}
+  <form id="shiftForm"><div class="modal-body">
+    <div class="field"><label for="f-emp">Who</label><select id="f-emp">${opt('','Open shift — let eligible people pick it up',!s.emp)}${EMP_IDS.map(i=>opt(i,PEOPLE[i].name+' · '+(ROLES[PEOPLE[i].role]||'')+(PEOPLE[i].status==='invited'?' (invited)':''),s.emp===i)).join('')}${ro?'':opt('__invite','+ Invite someone…',false)}</select>
+      ${ro?'':`<button type="button" class="linkish inv-link" id="f-invlink">${icon('plus',13)} Invite someone new</button>
+      <div class="inv-inline" id="f-inv" hidden><div class="row-2"><div class="field"><label for="f-invname">Their name</label><input id="f-invname" autocomplete="off"></div><div class="field"><label for="f-invcontact">Mobile or email</label><input id="f-invcontact" autocomplete="off" placeholder="For their invite link"></div></div>
+      <p class="muted" style="font-size:12px">They’ll get a secure invite link (expires in 7 days) and see this shift once they join. Their main role and location are taken from this shift — you can change them later in their profile.</p></div>`}</div>
+    <div class="row-2"><div class="field"><label for="f-day">Day</label><select id="f-day">${DAYS.map((x,i)=>opt(i,fmtDay(s.w,i),s.d===i)).join('')}</select></div>
+      <div class="field"><label for="f-loc">Location</label><select id="f-loc">${Object.keys(LOCS).filter(l=>ro?l===s.loc:canManage(l)).map(l=>opt(l,LOCS[l].name,s.loc===l)).join('')}</select></div></div>
+    <div class="row-2"><div class="field"><label for="f-s">Starts</label><input id="f-s" type="time" value="${s.s}" step="900" required></div>
+      <div class="field"><label for="f-e">Ends</label><input id="f-e" type="time" value="${s.e}" step="900" required></div></div>
+    <div class="row-2"><div class="field"><label for="f-role">Role</label><select id="f-role">${Object.keys(ROLES).map(r=>opt(r,ROLES[r],s.role===r)).join('')}</select></div>
+      <div class="field"><label for="f-ck">Checklist <span class="muted" style="font-weight:400">(optional)</span></label><select id="f-ck">${opt('','None',!s.ck)}${D.checklists.filter(c=>c.assign.type==='shift').map(c=>opt(c.id,c.name+' · '+LOCS[c.loc].name,s.ck===c.id)).join('')}</select></div></div>
+    <div id="f-warn" aria-live="polite"></div>
+  </div>
+  <div class="modal-foot">
+    ${ro?`<div class="left"><button type="button" class="btn btn-ghost btn-sm" id="shiftChat">${icon('chat',14)} Shift chat</button>${mgrsFor(ex.loc)[0]?`<button type="button" class="btn btn-ghost btn-sm" data-msgperson="${mgrsFor(ex.loc)[0]}">Message ${esc(firstOf(mgrsFor(ex.loc)[0]))}</button>`:''}</div><button type="button" class="btn btn-primary btn-sm" data-close>Close</button>`:`
+    ${ex?`<div class="left"><button type="button" class="btn btn-danger btn-sm" id="delShift">Delete</button>${ex.emp&&!ex.cover?`<button type="button" class="btn btn-ghost btn-sm" id="postCover">Needs coverage</button>`:''}<button type="button" class="btn btn-ghost btn-sm" id="shiftChat">${icon('chat',14)} Chat</button></div>`:''}
+    <button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button>
+    <button type="submit" class="btn btn-primary btn-sm" id="saveShift">${ex?'Save changes':'Add shift'}</button>`}
+  </div></form>`, m=>{
+    if(ro){ $$('select,input',m).forEach(el=>el.disabled=true); $('#f-warn',m).insertAdjacentHTML('beforebegin',`<div class="alert amber">ℹ<div>${esc(LOCS[ex.loc].name)} is managed by ${esc(mgrNames([ex.loc]))}. You can view this shift, but only they can change it.</div></div>`); $('#modalTitle',m).textContent='Shift details'; $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; go('messages'); }; return; }
+    const inviting=()=>$('#f-emp',m).value==='__invite';
+    const read=()=>({...s,emp:inviting()?null:($('#f-emp',m).value||null),d:+$('#f-day',m).value,loc:$('#f-loc',m).value,s:$('#f-s',m).value,e:$('#f-e',m).value,role:$('#f-role',m).value,ck:$('#f-ck',m).value||null});
+    const warn=()=>{
+      const cur=read(); const cf=conflictsFor(cur,ex&&ex.id); let html='';
+      for(const c of cf){
+        if(c.kind==='pending') html+=`<div class="alert amber">⚠<div><b>${esc(firstOf(cur.emp))} has asked for this day off</b> (pending): “${esc(c.to.reason)}”. <a href="#app/requests" data-close>Review request</a></div></div>`;
+        if(c.kind==='approved') html+=`<div class="alert red">⛔<div><b>${esc(firstOf(cur.emp))} is approved to be off</b> on ${fmtDay(cur.w,cur.d)}.</div></div>`;
+        if(c.kind==='overlap') html+=`<div class="alert red">⛔<div><b>Overlaps another shift</b> ${span(c.s)} at ${LOCS[c.s.loc].name}.</div></div>`;
+        if(c.kind==='unavail') html+=`<div class="alert amber">⚠<div><b>Outside ${esc(firstOf(cur.emp))}’s availability</b> — ${c.av.t==='off'?'unavailable on '+DAYS[cur.d]+'s':'available '+fmtT(c.av.s)+'–'+fmtT(c.av.e)+' on '+DAYS[cur.d]+'s'}.</div></div>`;
+        if(c.kind==='loc') html+=`<div class="alert amber">ℹ<div>${esc(firstOf(cur.emp))} doesn’t usually work at ${LOCS[cur.loc].name}.</div></div>`;
+      }
+      if(cur.s>=cur.e&&cur.e!=='00:00') html+=`<div class="alert amber">ℹ<div>Ends before it starts — treated as an overnight shift (${fmtH(hrs(cur))}).</div></div>`;
+      $('#f-warn',m).innerHTML=html;
+      $('#saveShift',m).textContent = inviting() ? (ex?'Invite & reassign':'Invite & add shift') : cf.some(c=>c.kind!=='loc') ? 'Save anyway' : (ex?'Save changes':'Add shift');
+    };
+    $$('select,input',m).forEach(el=>el.addEventListener('change',warn)); warn();
+    const il=$('#f-invlink',m); if(il) il.onclick=()=>{ $('#f-emp',m).value='__invite'; $('#f-emp',m).dispatchEvent(new Event('change',{bubbles:true})); };
+    $('#f-emp',m).addEventListener('change',()=>{const e=$('#f-emp',m).value; const pnl=$('#f-inv',m); if(pnl){ pnl.hidden=e!=='__invite'; if(il) il.hidden=e==='__invite'; } if(e==='__invite'){ $('#f-invname',m).focus(); warn(); return; } if(e&&!ex){ $('#f-role',m).value=PEOPLE[e].role; const l=PEOPLE[e].locs.find(canManage); if(l) $('#f-loc',m).value=l; warn(); }});
+    $('#shiftForm',m).addEventListener('submit',ev=>{ev.preventDefault(); const cur=read();
+      if(inviting()){ const name=$('#f-invname',m).value.trim(), contact=$('#f-invcontact',m).value.trim();
+        if(!name){ toast('Add their name to send an invite'); $('#f-invname',m).focus(); return; }
+        if(contact.includes('@')?!/^\S+@\S+\.\S+$/.test(contact):digits(contact).length<10){ toast('Add a full mobile number or email for their invite'); $('#f-invcontact',m).focus(); return; }
+        closeModal();
+        requireRoomFor(1,()=>{ const id=createInvitee({name,contact,role:cur.role,locs:[cur.loc]}); cur.emp=id;
+          if(ex){ snapPub(ex); Object.assign(ex,cur); markDraft(ex); if(ex.cover&&ex.cover.from===null) delete ex.cover; }
+          else D.shifts.push({id:nid('s'),...cur,draft:true,draftBy:ME_MGR});
+          if($('#scrim').classList.contains('open')) closeModal(); commit(); toast(`Invite sent to ${esc(name)} · ${fmtDay(cur.w,cur.d)} ${span(cur)} is theirs once they join (prototype — nothing was sent)`); }, `Inviting ${name}`);
+        return; }
+      if(ex){ const changed=['emp','d','s','e','role','loc','ck'].some(k=>ex[k]!==cur[k]); if(changed) snapPub(ex); Object.assign(ex,cur); if(changed) markDraft(ex); if(!ex.emp&&!ex.cover) ex.cover={status:'needed',from:null}; if(ex.emp&&ex.cover&&ex.cover.from===null) delete ex.cover; toast(changed?'Shift updated — publish to notify the team':'No changes'); }
+      else { const ns={id:nid('s'),...cur,draft:true,draftBy:ME_MGR}; if(!ns.emp) ns.cover={status:'needed',from:null}; D.shifts.push(ns); toast(`Shift added for ${esc(firstOf(ns.emp))} · ${fmtDay(ns.w,ns.d)}`); }
+      closeModal(); commit(); });
+    if(ex){
+      $('#delShift',m).onclick=()=>{ const i=D.shifts.indexOf(ex); D.shifts.splice(i,1); if(!ex.draft) D.deleted[delKey(ex.w,ex.loc)]=(D.deleted[delKey(ex.w,ex.loc)]||0)+1; closeModal(); commit();
+        toast('Shift deleted',()=>{ D.shifts.splice(i,0,ex); if(!ex.draft) D.deleted[delKey(ex.w,ex.loc)]--; commit(); }); };
+      const pc=$('#postCover',m); if(pc) pc.onclick=()=>{ ex.cover={status:'needed',from:ex.emp,note:'Posted by manager'}; closeModal(); commit(); toast(`Posted for coverage — eligible teammates will be notified`); };
+      $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; go('messages'); };
+    }
+  });
+}
+function publish(){
+  const w=UI.week, locs=myLocs(), n=draftCount(w,locs); if(!n) return;
+  const changedLocs=locs.filter(l=>draftCount(w,[l]));
+  const affected=new Set(draftsIn(w,locs).filter(s=>s.emp).map(s=>s.emp));
+  D.shifts.forEach(s=>{ if(s.w===w&&locs.includes(s.loc)){ s.draft=false; delete s.draftBy; delete s.pub; } }); locs.forEach(l=>D.deleted[delKey(w,l)]=0);
+  D.published[w]=D.published[w]||{}; changedLocs.forEach(l=>D.published[w][l]={by:ME_MGR,when:nowStamp()}); commit();
+  toast(`${esc(locNames(changedLocs))} published${D.settings.sched.notifyChangedOnly?` · ${affected.size} ${affected.size===1?'person':'people'} with changed shifts notified`:' · everyone notified'}`);
+}
+function copyWeek(){
+  const w=UI.week; const prev=shiftsIn(w-1,'all').filter(s=>canManage(s.loc));
+  prev.forEach(s=>D.shifts.push({...s,id:nid('s'),w,draft:true,draftBy:ME_MGR,cover:s.emp?undefined:{status:'needed',from:null}}));
+  commit(); toast(`Copied ${prev.length} shifts from last week as drafts`,()=>{ D.shifts=D.shifts.filter(s=>!(s.w===w&&s.draft)); commit(); });
+}
+
+/* drag & drop */
+let dragId=null;
+document.addEventListener('dragstart',e=>{ const s=e.target.closest&&e.target.closest('[data-shift]'); if(!s) return; dragId=s.dataset.shift; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragId);}catch(_){} });
+document.addEventListener('dragend',()=>{ dragId=null; $$('.drop').forEach(x=>x.classList.remove('drop')); });
+document.addEventListener('dragover',e=>{ if(!dragId) return; const c=e.target.closest('[data-cell]'); if(c){ e.preventDefault(); $$('.sg-cell.drop').forEach(x=>x!==c&&x.classList.remove('drop')); c.classList.add('drop'); } });
+document.addEventListener('drop',e=>{ const c=e.target.closest('[data-cell]'); if(!c||!dragId) return; e.preventDefault();
+  const s=shiftById(dragId); const [emp,d]=c.dataset.cell.split('|'); const before={emp:s.emp,d:s.d,draft:s.draft,draftBy:s.draftBy,cover:s.cover,pub:s.pub};
+  const ne=emp||null, nd=+d; if(s.emp===ne&&s.d===nd) return;
+  if(!canManage(s.loc)){ toast(`Only ${esc(mgrNames([s.loc]))} can move ${esc(LOCS[s.loc].name)} shifts`); return; }
+  snapPub(s); s.emp=ne; s.d=nd; markDraft(s); if(!ne&&!s.cover) s.cover={status:'needed',from:null}; if(ne&&s.cover&&s.cover.from===null) delete s.cover;
+  const cf=conflictsFor(s,s.id).filter(x=>x.kind!=='loc');
+  commit();
+  const msg = cf.length ? `Moved — heads up: ${esc(firstOf(ne))} ${cf[0].kind==='pending'?'has a pending time-off request':cf[0].kind==='approved'?'is approved off':cf[0].kind==='unavail'?'marked that time as unavailable':'already has an overlapping shift'} that day` : `Moved to ${esc(firstOf(ne))} · ${fmtDay(s.w,nd)}`;
+  toast(msg,()=>{ Object.assign(s,before); if(!before.cover) delete s.cover; commit(); });
+});
