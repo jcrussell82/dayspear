@@ -1,14 +1,15 @@
 {
   "name": "dayspear",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "DaySpear — team scheduling, made simple. Zero-dependency Node server + web app.",
+  "description": "DaySpear — team scheduling, made simple. Static site (GitHub Pages) + Supabase.",
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "node build.mjs --single",
-    "start": "node --disable-warning=ExperimentalWarning server/index.js",
-    "dev": "node build.mjs && node --disable-warning=ExperimentalWarning --watch-path=server server/index.js",
-    "test": "node build.mjs && node --disable-warning=ExperimentalWarning --test test/*.test.mjs"
+    "serve": "node build.mjs && node serve.mjs",
+    "test": "node --test test/*.test.mjs",
+    "stack": "bash test/stack/stack.sh start",
+    "stack:stop": "bash test/stack/stack.sh stop"
   }
 }

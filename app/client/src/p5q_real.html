@@ -1,19 +1,63 @@
-/* ======================= REAL MODE — server-backed accounts and data =======================
-   boot() asks the server for /api/config. If it answers, the app runs in REAL mode:
-   sign-in, sign-up and invites call the API, and every change made through the existing
-   screens is turned into a short list of "ops" and sent to the server, which checks
-   permissions and saves it. If there is no server (GitHub Pages, a local file) or the URL
-   has ?demo, the app runs as the demo with clearly labelled sample data, stored only in
-   this browser. Nothing here holds a secret: keys stay on the server. */
+/* ======================= REAL MODE — Supabase-backed accounts and data =======================
+   The site itself is static (GitHub Pages). config.js tells it where the Supabase project is.
+   - Sign-in uses Supabase Auth: one-time codes by email (or text, once turned on).
+   - Everything else goes through the `api` Edge Function, which checks who you are and what
+     your role allows before reading or saving anything. The database tables are locked to browsers.
+   Every change made through the existing screens is turned into a short list of "ops" and sent
+   to the function. With no config.js (or ?demo in the address) the app runs as the demo with
+   clearly labelled sample data, stored only in this browser. The public key in config.js is
+   designed to be public; secrets (Stripe, email) live only in Supabase. */
 let CFG=null, SESSION=null, LOADED=false;
 const SYNC={base:null, version:0, busy:false, again:false, timer:null};
+const SB=(window.DAYSPEAR_CONFIG||{});
+const SB_URL=String(SB.supabaseUrl||'').replace(/\/$/,''), SB_KEY=SB.supabaseAnonKey||'';
 
-async function API(method, url, body){
-  const r=await fetch(url,{method, credentials:'same-origin', headers:{'X-DaySpear':'1',...(body!==undefined?{'Content-Type':'application/json'}:{})}, body:body!==undefined?JSON.stringify(body):undefined});
+/* ---------- Supabase Auth (talks to its REST endpoints directly — no library needed) ---------- */
+const AUTH_KEY='dayspear-auth';
+const store={ // "Keep me signed in" → localStorage, otherwise only this tab (sessionStorage)
+  get(){ try{ return JSON.parse(localStorage.getItem(AUTH_KEY)||sessionStorage.getItem(AUTH_KEY)||'null'); }catch(e){ return null; } },
+  set(v,keep){ try{ localStorage.removeItem(AUTH_KEY); sessionStorage.removeItem(AUTH_KEY); if(v) (keep?localStorage:sessionStorage).setItem(AUTH_KEY,JSON.stringify(v)); }catch(e){} },
+  keep(){ try{ return !!localStorage.getItem(AUTH_KEY); }catch(e){ return false; } },
+};
+// legacy anon keys are JWTs and also go in Authorization; newer sb_publishable_ keys go only in apikey
+const bearer=t=>t?{Authorization:`Bearer ${t}`}:SB_KEY.startsWith('eyJ')?{Authorization:`Bearer ${SB_KEY}`}:{};
+async function gotrue(method, path, body, token){
+  const r=await fetch(`${SB_URL}/auth/v1${path}`,{method, headers:{apikey:SB_KEY, ...bearer(token), 'Content-Type':'application/json'}, body:body?JSON.stringify(body):undefined});
+  let j={}; try{ j=await r.json(); }catch(e){}
+  if(!r.ok){ const err=new Error(authMsg(j)); err.status=r.status; err.data=j; throw err; }
+  return j;
+}
+function authMsg(j){
+  const m=String(j.msg||j.error_description||j.message||j.error||'');
+  if(/expired|invalid/i.test(m)&&/token|otp/i.test(m)) return 'That code isn’t right or has expired. Check it, or request a new one.';
+  if(/rate|security purposes|seconds/i.test(m)) return 'Please wait a minute before asking for another code.';
+  if(/already.*registered|already been registered|exists/i.test(m)) return 'That email or number is already used by another account.';
+  return m||'Something went wrong. Please try again.';
+}
+const keepSession=(sess,keep)=>store.set({access_token:sess.access_token, refresh_token:sess.refresh_token, expires_at:sess.expires_at||Math.floor(Date.now()/1000)+(sess.expires_in||3600)},keep);
+let refreshing=null;
+async function accessToken(){
+  const s=store.get(); if(!s) return null;
+  if(s.expires_at*1000-Date.now()>60e3) return s.access_token;
+  if(!refreshing) refreshing=gotrue('POST','/token?grant_type=refresh_token',{refresh_token:s.refresh_token})
+    .then(n=>{ keepSession(n,store.keep()); return n.access_token; }).catch(()=>{ store.set(null); return null; }).finally(()=>{ refreshing=null; });
+  return refreshing;
+}
+// one-time codes: send, then verify (type: email | sms | email_change | phone_change)
+const sendCode=(ident,createUser,data)=>gotrue('POST','/otp',{...(ident.includes('@')?{email:ident.trim().toLowerCase()}:{phone:toE164(ident)}),create_user:createUser,...(data?{data}:{})});
+async function verifyCode(ident,type,token,keep){ const s=await gotrue('POST','/verify',{...(ident.includes('@')?{email:ident.trim().toLowerCase()}:{phone:toE164(ident)}),type,token}); keepSession(s,keep!==false); return s; }
+function toE164(v){ const d=digits(v); return String(v).trim().startsWith('+')?'+'+d:d.length===10?'+1'+d:'+'+d; }
+const maskId=v=>v.includes('@')?maskEmail(v.trim().toLowerCase()):maskPhone(v);
+
+/* ---------- the DaySpear API (the `api` Edge Function) ---------- */
+async function API(method, path, body){
+  const tok=await accessToken();
+  const r=await fetch(`${SB_URL}/functions/v1/api${path}`,{method, headers:{apikey:SB_KEY, ...bearer(tok), ...(SESSION&&SESSION.businessId?{'X-Business':SESSION.businessId}:{}), ...(body!==undefined?{'Content-Type':'application/json'}:{})}, body:body!==undefined?JSON.stringify(body):undefined});
   let j={}; try{ j=await r.json(); }catch(e){}
   if(!r.ok){ const err=new Error(j.error||'Something went wrong. Please try again.'); err.status=r.status; err.data=j; throw err; }
   return j;
 }
+async function loadSession(){ const s=await API('GET','/session'); SESSION=s.signedIn&&s.businesses.length?{...s, businessId:(SESSION&&SESSION.businessId)||s.businesses[0].businessId}:null; return SESSION; }
 
 /* ---------- dates: the server stores real week dates; the screens use weeks relative to this one ---------- */
 const isoDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -91,7 +135,7 @@ function applyServer(doc,version){
   if(!UI.real){ UI.real=true; D.unread={}; UI.loc=isOwner(ME)||(PEOPLE[ME].manages||[]).length!==1?'all':PEOPLE[ME].manages[0]; UI.week=1; UI.channel='ann'; UI.openCl={}; UI.emp={tab:'home',thread:null}; }
   if(!LOCS[UI.loc]) UI.loc='all';
 }
-async function loadWorkspace(){ const r=await API('GET','/api/workspace'); applyServer(r.doc,r.version); return r; }
+async function loadWorkspace(){ const r=await API('GET','/workspace'); applyServer(r.doc,r.version); return r; }
 const pendingOps=()=>SYNC.base?diffOps(SYNC.base,toServer(D)):[];
 function queueSync(){ clearTimeout(SYNC.timer); SYNC.timer=setTimeout(flush,40); }
 async function flush(){
@@ -100,15 +144,17 @@ async function flush(){
   const cur=toServer(D), ops=diffOps(SYNC.base,cur); if(!ops.length) return;
   SYNC.busy=true; SYNC.base=JSON.parse(J(cur)); const sent=J(cur);
   try{
-    const r=await API('POST','/api/workspace/ops',{ops});
+    const r=await API('POST','/workspace/ops',{ops});
     SYNC.version=r.version;
+    const mine=ops.find(o=>o.c==='people'&&o.id===ME&&o.v&&(o.v.email!==undefined||o.v.phone!==undefined));
+    if(mine) setTimeout(()=>changeSignIn(mine.v),300);
     if(J(toServer(D))===sent){ applyServer(r.doc); renderKeepingFocus(); } else SYNC.again=true;
     afterSave(r);
   }catch(err){ await syncFailed(err); }
   finally{ SYNC.busy=false; if(SYNC.again){ SYNC.again=false; flush(); } }
 }
 async function syncFailed(err){
-  if(err.status===401){ SESSION=null; LOADED=false; location.hash='#login'; toast('Please sign in again.'); return; }
+  if(err.status===401){ SESSION=null; LOADED=false; store.set(null); location.hash='#login'; toast('Please sign in again.'); return; }
   try{ await loadWorkspace(); }catch(e){}
   renderKeepingFocus();
   if(err.status===402&&err.data&&err.data.code==='upgrade_required'){
@@ -123,31 +169,43 @@ function renderKeepingFocus(){
   const a=document.activeElement, id=a&&a.id&&a.closest&&a.closest('.view')?a.id:null, val=id?a.value:null, pos=id&&a.selectionStart!=null?a.selectionStart:null;
   render(); if(id){ const n=document.getElementById(id); if(n){ n.value=val; n.focus(); if(pos!=null) try{ n.setSelectionRange(pos,pos); }catch(e){} } }
 }
-function afterSave(r){
-  (r.devInviteLinks||[]).forEach(showDevLink);
-  const v=(r.verify||[]); const un=v.find(x=>x.unavailable); if(un) toast('Text messages aren’t set up yet, so your new mobile number can’t be confirmed or used to sign in.');
-  const todo=v.filter(x=>x.masked); if(todo.length) setTimeout(()=>openVerify(todo),300);
+function afterSave(r){ showShareLinks(r.shareLinks); }
+// Invites that couldn't be emailed (no email provider yet, or only a mobile number): the manager shares the link.
+function showShareLinks(list){
+  if(!list||!list.length) return;
+  openModal(`${modalHead(list.length>1?'Share these invite links':'Share this invite link')}<div class="modal-body">
+    <p style="color:var(--ink-2);font-size:14px">${CFG&&CFG.email?'These people don’t have an email address on file, so':'Email isn’t set up yet, so'} send ${list.length>1?'each link':'the link'} yourself — by text, for example. Each link works once and expires in 7 days.</p>
+    ${list.map((l,i)=>`<div class="field"><label for="sl-${i}">${esc(l.name)}</label><div style="display:flex;gap:8px"><input id="sl-${i}" readonly value="${esc(l.link)}" style="flex:1"><button type="button" class="btn btn-ghost btn-sm" data-copylink="sl-${i}">Copy</button></div></div>`).join('')}
+  </div><div class="modal-foot"><button type="button" class="btn btn-primary btn-sm" data-close>Done</button></div>`, m=>{
+    $$('[data-copylink]',m).forEach(b=>b.onclick=async()=>{ const inp=$('#'+b.dataset.copylink,m); inp.select(); try{ await navigator.clipboard.writeText(inp.value); }catch(e){ document.execCommand&&document.execCommand('copy'); } b.textContent='Copied'; });
+  });
 }
-function showDevLink(link){ console.info('[DaySpear dev] invite link:', link); toast(`Development mode — no email provider, so here’s the invite link: <a href="${esc(link)}" target="_blank" rel="noopener">open invite</a>`); }
 setInterval(async()=>{
   if(!REAL||!LOADED||SYNC.busy||document.visibilityState!=='visible'||$('#scrim').classList.contains('open')||!document.body.classList.contains('in-app')) return;
   if(pendingOps().length) return;
-  try{ const r=await API('GET','/api/workspace'); if(r.version!==SYNC.version&&!SYNC.busy&&!pendingOps().length){ applyServer(r.doc,r.version); renderKeepingFocus(); } }
-  catch(e){ if(e.status===401){ SESSION=null; LOADED=false; location.hash='#login'; } }
-},20000);
+  try{ const r=await API('GET','/workspace?since='+SYNC.version); if(!r.unchanged&&r.version!==SYNC.version&&!SYNC.busy&&!pendingOps().length){ applyServer(r.doc,r.version); renderKeepingFocus(); } }
+  catch(e){ if(e.status===401){ SESSION=null; LOADED=false; store.set(null); location.hash='#login'; } }
+},10000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'&&REAL) flush(); });
 
-/* ---------- confirming a changed email / number ---------- */
-function openVerify(list){
-  const it=list[0]; if(!it) return;
+/* ---------- changing the email / number you sign in with ---------- */
+// The profile saves the new contact; Supabase Auth then sends a code to it. Until it's confirmed,
+// you keep signing in with the old one (the profile shows "Not verified").
+async function changeSignIn(v){
+  const tok=await accessToken(); if(!tok) return;
+  if(v.email){ try{ await gotrue('PUT','/user',{email:v.email.trim().toLowerCase()},tok); openVerify({kind:'email',value:v.email}); }catch(e){ toast(esc(e.message)); } return; }
+  if(v.phone){ if(!CFG||!CFG.sms){ toast('Saved. Your mobile number is for your manager only — sign-in by text isn’t turned on.'); return; }
+    try{ await gotrue('PUT','/user',{phone:toE164(v.phone)},tok); openVerify({kind:'phone',value:v.phone}); }catch(e){ toast(esc(e.message)); } }
+}
+function openVerify(it){
   openModal(`${modalHead(it.kind==='email'?'Confirm your new email':'Confirm your new number')}<form id="verifyForm"><div class="modal-body">
-    <p style="color:var(--ink-2);font-size:14px">We sent a 6-digit code to <b>${esc(it.masked)}</b>. Until you confirm it, you’ll keep signing in with your other details.</p>
-    <div class="field"><label for="vf-code">6-digit code</label><input id="vf-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div>
+    <p style="color:var(--ink-2);font-size:14px">We sent a code to <b>${esc(maskId(it.value))}</b>. Until you confirm it, you’ll keep signing in with your current details.</p>
+    <div class="field"><label for="vf-code">Code</label><input id="vf-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••"></div>
     <p class="auth-err" id="vf-err" role="alert"></p></div>
     <div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Later</button><button class="btn btn-primary btn-sm" type="submit">Confirm</button></div></form>`, m=>{
-    $('#verifyForm',m).onsubmit=async e=>{ e.preventDefault(); const code=digits($('#vf-code',m).value); if(code.length!==6){ $('#vf-err',m).textContent='Enter the 6-digit code.'; return; }
+    $('#verifyForm',m).onsubmit=async e=>{ e.preventDefault(); const code=digits($('#vf-code',m).value); if(code.length<6){ $('#vf-err',m).textContent='Enter the code we sent you.'; return; }
       const b=$('button[type=submit]',m); b.disabled=true;
-      try{ const r=await API('POST','/api/me/verify',{kind:it.kind,code}); applyServer(r.doc,r.version); closeModal(); render(); toast(it.kind==='email'?'Email confirmed — use it to sign in from now on':'Number confirmed'); if(list.length>1) setTimeout(()=>openVerify(list.slice(1)),300); }
+      try{ await verifyCode(it.value,it.kind==='email'?'email_change':'phone_change',code,store.keep()); await loadWorkspace(); closeModal(); render(); toast(it.kind==='email'?'Email confirmed — use it to sign in from now on':'Number confirmed — you can sign in with it'); }
       catch(err){ $('#vf-err',m).textContent=err.message; b.disabled=false; } };
   });
 }
@@ -166,7 +224,7 @@ function realGuard(){
   if(h.includes('checkout=cancelled')){ history.replaceState(null,'','#app/settings/plan'); setTimeout(()=>toast('Checkout cancelled — nothing was charged.'),300); }
   return true;
 }
-function refreshBillingSoon(){ let n=0; const t=setInterval(async()=>{ n++; try{ const r=await API('GET','/api/workspace'); if(!pendingOps().length){ applyServer(r.doc,r.version); renderKeepingFocus(); } if(r.doc.billing.planId!=='free'||n>6) clearInterval(t); }catch(e){ clearInterval(t); } },3000); }
+function refreshBillingSoon(){ let n=0; const t=setInterval(async()=>{ n++; try{ const r=await API('GET','/workspace'); if(!pendingOps().length){ applyServer(r.doc,r.version); renderKeepingFocus(); } if(r.doc.billing.planId!=='free'||n>6) clearInterval(t); }catch(e){ clearInterval(t); } },3000); }
 
 /* ---------- sign in ---------- */
 const RA={step:'id', input:'', masked:'', via:'', ref:null, err:'', resendAt:0, recovered:false, info:''};
@@ -187,14 +245,14 @@ function realAuth(){
     <p class="auth-foot" style="margin-top:-6px">Invited by your manager? Open the secure link in your invite to set up your account. Links work once and expire after 7 days.</p>`;
   if(a.step==='code') f=`<button type="button" class="auth-back" data-ra="back">${icon('left',14)} Back</button>
     <h1 id="authTitle">${a.via==='email'?'Check your email':'Check your texts'}</h1>
-    <p class="auth-sub">If <b>${esc(a.masked)}</b> belongs to a DaySpear account, we’ve sent it a 6-digit code. It expires in 10 minutes.</p>
-    <form id="raCode" novalidate><div class="field"><label for="ra-code">6-digit code</label><input id="ra-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div>
+    <p class="auth-sub">If <b>${esc(a.masked)}</b> belongs to a DaySpear account, we’ve sent it a sign-in code. It expires soon, so use it right away.</p>
+    <form id="raCode" novalidate><div class="field"><label for="ra-code">Code</label><input id="ra-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••"></div>
     ${errP(a.err)}<label class="auth-keep"><input type="checkbox" id="ra-keep" checked><span>Keep me signed in on this device <span class="muted">— turn this off on shared tablets</span></span></label>
     <button class="btn btn-primary auth-cta" type="submit">Sign in</button></form>
     <p class="auth-foot"><span id="ra-resend"></span> · <button type="button" class="linkish" data-ra="recover">Can’t get the code?</button></p>`;
   if(a.step==='recover') f=`<button type="button" class="auth-back" data-ra="tocode">${icon('left',14)} Back</button>
-    <h1 id="authTitle">Can’t get the code?</h1><p class="auth-sub">Check your spam folder, or wait a minute and resend. You can also get a code at the other email or number on your account, if you’ve confirmed one.</p>
-    ${a.info?`<div class="alert amber">ℹ<div>${esc(a.info)}</div></div>`:`<button type="button" class="demo-acct" data-ra="other">${icon('inbox',20)}<span><b>Send a code to my other contact instead</b><small>Only works if it’s been confirmed</small></span></button>`}
+    <h1 id="authTitle">Can’t get the code?</h1><p class="auth-sub">Check your spam folder, or wait a minute and resend.</p>
+    ${CFG&&CFG.sms?`<button type="button" class="demo-acct" data-ra="other">${icon(RA.via==='email'?'phone':'inbox',20)}<span><b>Use my ${RA.via==='email'?'mobile number':'email'} instead</b><small>Only works if you’ve confirmed it in your profile</small></span></button>`:''}
     <div class="recover-box"><h3>Lost access to both?</h3><p><b>Employees:</b> ask your manager to update your details and send a new invite. <b>Owners and managers:</b> contact support — we’ll check you own the account before restoring access.</p><a class="btn btn-ghost btn-sm" href="#contact" data-topic="recovery">Contact support</a></div>`;
   if(a.step==='done') f=`<div class="auth-done"><div class="spin" aria-hidden="true"></div><h1 id="authTitle">Signing you in…</h1></div>`;
   authShell(f,'Every shift covered. Everyone in the loop.','Schedules, time off, swaps and checklists for small teams — on any phone or computer.');
@@ -203,16 +261,21 @@ function realAuth(){
 function raTick(){ clearInterval(AUTH.timer); const upd=()=>{ const el=$('#ra-resend'); if(!el){ clearInterval(AUTH.timer); return; } const s=Math.ceil((RA.resendAt-Date.now())/1000); el.innerHTML=s>0?`Resend code in ${s}s`:`<button type="button" class="linkish" data-ra="resend">Resend code</button>`; if(s<=0) clearInterval(AUTH.timer); }; upd(); AUTH.timer=setInterval(upd,1000); }
 const busy=(form,on)=>{ const b=form&&form.querySelector('button[type=submit]'); if(b){ b.disabled=on; b.classList.toggle('is-busy',on); } };
 async function raStart(form){
-  try{ busy(form,true); const r=await API('POST','/api/auth/start',{identifier:RA.input}); Object.assign(RA,{step:'code',masked:r.masked,via:r.via,ref:null,err:'',resendAt:Date.now()+30000,recovered:false}); }
+  try{ busy(form,true);
+    try{ await sendCode(RA.input,false); }
+    catch(e){ if(!(e.status===422||e.status===400&&/signup|not allowed|not found/i.test(e.message))) throw e; } // no account: say nothing different
+    Object.assign(RA,{step:'code',masked:maskId(RA.input),via:RA.input.includes('@')?'email':'sms',err:'',resendAt:Date.now()+60000,recovered:false}); }
   catch(e){ RA.err=e.message; } realAuth();
 }
 async function raVerify(form){
-  const code=digits($('#ra-code').value); if(code.length!==6){ RA.err='Enter the 6-digit code we sent you.'; return realAuth(); }
-  try{ busy(form,true); const r=await API('POST','/api/auth/verify',{identifier:RA.input,ref:RA.ref,code,keep:$('#ra-keep').checked}); RA.recovered=r.recovered; RA.step='done'; realAuth(); await enterApp(); }
-  catch(e){ RA.err=e.message; RA.step='code'; realAuth(); }
+  const code=digits($('#ra-code').value); if(code.length<6){ RA.err='Enter the code we sent you.'; return realAuth(); }
+  try{ busy(form,true); await verifyCode(RA.input,RA.via==='email'?'email':'sms',code,$('#ra-keep').checked); RA.step='done'; realAuth(); await enterApp(); }
+  catch(e){ RA.err=e.status===403&&!e.message?'That code isn’t right or has expired.':e.message; RA.step='code'; realAuth(); }
 }
 async function enterApp(){
-  SESSION=await API('GET','/api/session'); LOADED=false; UI.real=false; await loadWorkspace();
+  await loadSession();
+  if(!SESSION){ store.set(null); Object.assign(RA,{step:'id',err:'Your account isn’t part of a business yet. Open your invite link, or create a free account.'}); location.hash='#login'; realAuth(); return; }
+  LOADED=false; UI.real=false; await loadWorkspace();
   const rec=RA.recovered; Object.assign(RA,{step:'id',input:'',err:'',ref:null,recovered:false,info:''});
   location.hash=isMgr(ME)?'#app/schedule':'#app/employee';
   if(rec) setTimeout(()=>{ if(isMgr(ME)) openProfile(ME); else { UI.emp.tab='profile'; render(); } toast('You signed in with your other contact. Update the one that wasn’t working so you can use it again.'); },400);
@@ -222,19 +285,16 @@ document.addEventListener('submit',e=>{
   if(f.id==='raId'){ e.preventDefault(); RA.input=$('#ra-id').value.trim(); if(!RA.input){ RA.err='Enter your email'+(CFG.sms?' or mobile number.':'.'); return realAuth(); } raStart(f); }
   if(f.id==='raCode'){ e.preventDefault(); raVerify(f); }
 },true);
-document.addEventListener('input',e=>{ if(REAL&&e.target.id==='ra-code'){ const v=digits(e.target.value).slice(0,6); e.target.value=v; if(v.length===6&&!RA.auto){ RA.auto=true; setTimeout(()=>{ RA.auto=false; },1500); raVerify($('#raCode')); } } });
+document.addEventListener('input',e=>{ if(REAL&&e.target.id==='ra-code'){ const v=digits(e.target.value).slice(0,10); e.target.value=v; if(v.length===6&&!RA.auto){ RA.auto=true; setTimeout(()=>{ RA.auto=false; },1500); raVerify($('#raCode')); } } });
 document.addEventListener('click',async e=>{
   if(!REAL) return; const t=e.target.closest('[data-ra]'); if(!t) return; const a=t.dataset.ra;
   if(a==='back'){ RA.step='id'; RA.err=''; realAuth(); }
   if(a==='recover'){ RA.step='recover'; RA.info=''; realAuth(); }
   if(a==='tocode'){ RA.step='code'; RA.err=''; realAuth(); }
   if(a==='resend'){ await raStart(null); toast('New code sent'); }
-  if(a==='other'){ try{ const r=await API('POST','/api/auth/alternate',{identifier:RA.input});
-      if(r.none){ RA.info='There’s no other confirmed email or number on this account. See below for how to get back in.'; return realAuth(); }
-      Object.assign(RA,{step:'code',masked:r.masked,via:r.via,ref:r.ref,err:'',resendAt:Date.now()+30000}); realAuth(); toast('Code sent'); }
-    catch(err){ RA.info=err.message; realAuth(); } }
+  if(a==='other'){ Object.assign(RA,{step:'id',input:'',err:'',recovered:true}); realAuth(); }
 });
-async function realSignOut(){ try{ await API('POST','/api/auth/logout'); }catch(e){} SESSION=null; LOADED=false; UI.real=false; SYNC.base=null; D=seed(); syncRefs(); ME_MGR='mgr'; ME='e1'; location.hash='#login'; toast('You’re signed out'); }
+async function realSignOut(){ const tok=await accessToken(); if(tok) gotrue('POST','/logout',{},tok).catch(()=>{}); store.set(null); SESSION=null; LOADED=false; UI.real=false; SYNC.base=null; D=seed(); syncRefs(); ME_MGR='mgr'; ME='e1'; document.body.classList.remove('is-emp'); location.hash='#login'; toast('You’re signed out'); }
 
 /* ---------- accepting an invite ---------- */
 const RI={token:null, info:null, step:'welcome', err:'', contact:'', masked:'', loading:false, gone:false};
@@ -244,7 +304,7 @@ function realInvite(expired){
   const shell=c=>authShell(c,'Your shifts, your team, one place.','See your schedule, swap shifts, request time off and chat with your team — from any phone.');
   if(expired||!token||token==='expired'||RI.gone) return shell(`<h1 id="authTitle">This invite link has expired</h1><p class="auth-sub">For your security, invite links work once and expire after 7 days. Ask your manager to send you a new one.</p><a class="btn btn-primary auth-cta" href="#login">Go to sign in</a><p class="auth-foot">Already set up? Sign in with your email or mobile number.</p>`);
   if(!RI.info){ shell(`<div class="auth-done"><div class="spin" aria-hidden="true"></div><h1 id="authTitle">Opening your invite…</h1></div>`);
-    if(!RI.loading){ RI.loading=true; API('GET','/api/invites/'+encodeURIComponent(token)).then(r=>{ RI.info=r; RI.contact=r.contactKind==='phone'&&!r.smsAvailable?'':r.contact; }).catch(()=>{ RI.gone=true; }).finally(()=>{ RI.loading=false; if(location.hash.startsWith('#invite')) realInvite(); }); }
+    if(!RI.loading){ RI.loading=true; API('GET','/invites/'+encodeURIComponent(token)).then(r=>{ RI.info=r; RI.contact=r.contactKind==='phone'&&!r.smsAvailable?'':r.contact; }).catch(()=>{ RI.gone=true; }).finally(()=>{ RI.loading=false; if(location.hash.startsWith('#invite')) realInvite(); }); }
     return; }
   const i=RI.info, phoneOK=i.smsAvailable; let f='';
   if(RI.step==='welcome') f=`<span class="pill pill-green nodot" style="justify-self:start">${icon('check',12)} Secure invite · expires ${esc(relStamp(i.expiresAt).replace(/^Today.*/,'today'))}</span>
@@ -254,8 +314,8 @@ function realInvite(expired){
     <div class="field"><label for="ri-contact">${phoneOK?'Mobile number or email':'Email'}</label><input id="ri-contact" value="${esc(RI.contact)}" autocomplete="${phoneOK?'tel':'email'}"><span class="muted" style="font-size:12px">We’ll send a code to confirm it’s you. You’ll use this to sign in.</span></div>
     ${errP(RI.err)}<button class="btn btn-primary auth-cta" type="submit">Send my code</button></form><p class="auth-foot">Not you, or don’t work here? Just ignore this invite.</p>`;
   if(RI.step==='code') f=`<button type="button" class="auth-back" data-ri="back">${icon('left',14)} Back</button><h1 id="authTitle">Enter your code</h1>
-    <p class="auth-sub">We sent a 6-digit code to <b>${esc(RI.masked)}</b>.</p>
-    <form id="riCode" novalidate><div class="field"><label for="ri-code">6-digit code</label><input id="ri-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div>
+    <p class="auth-sub">We sent a code to <b>${esc(RI.masked)}</b>.</p>
+    <form id="riCode" novalidate><div class="field"><label for="ri-code">Code</label><input id="ri-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••"></div>
     ${errP(RI.err)}<button class="btn btn-primary auth-cta" type="submit">Confirm and join</button></form>`;
   if(RI.step==='done') f=`<div class="auth-done" style="padding:10px 0"><div class="ok-badge">${icon('check',26)}</div><h1 id="authTitle">You’re in, ${esc((RI.name||i.name).split(' ')[0])}!</h1>
     <p class="auth-sub">Your account is set up. Next time, sign in with ${esc(RI.masked)}.</p>
@@ -267,10 +327,13 @@ document.addEventListener('submit',async e=>{
   if(!REAL) return; const f=e.target;
   if(f.id==='riForm'){ e.preventDefault(); RI.name=$('#ri-name').value.trim(); RI.contact=$('#ri-contact').value.trim();
     if(!RI.name){ RI.err='Please add your name.'; return realInvite(); }
-    try{ busy(f,true); const r=await API('POST',`/api/invites/${encodeURIComponent(RI.token)}/start`,{name:RI.name,contact:RI.contact}); Object.assign(RI,{step:'code',masked:r.masked,err:''}); }
-    catch(err){ if(err.status===410) RI.gone=true; RI.err=err.message; } realInvite(); }
-  if(f.id==='riCode'){ e.preventDefault(); const code=digits($('#ri-code').value); if(code.length!==6){ RI.err='Enter the 6-digit code we sent you.'; return realInvite(); }
-    try{ busy(f,true); await API('POST',`/api/invites/${encodeURIComponent(RI.token)}/accept`,{contact:RI.contact,code}); RI.step='done'; RI.err=''; }
+    const isEmail=RI.contact.includes('@');
+    if(isEmail?!/^\S+@\S+\.\S+$/.test(RI.contact):(!RI.info.smsAvailable||digits(RI.contact).length<10)){ RI.err=RI.info.smsAvailable?'Enter a full mobile number or email.':'Enter a valid email address.'; return realInvite(); }
+    try{ busy(f,true); await sendCode(RI.contact,true,{name:RI.name}); Object.assign(RI,{step:'code',masked:maskId(RI.contact),err:''}); }
+    catch(err){ RI.err=err.message; } realInvite(); }
+  if(f.id==='riCode'){ e.preventDefault(); const code=digits($('#ri-code').value); if(code.length<6){ RI.err='Enter the code we sent you.'; return realInvite(); }
+    try{ busy(f,true); await verifyCode(RI.contact,RI.contact.includes('@')?'email':'sms',code,true);
+      const r=await API('POST',`/invites/${encodeURIComponent(RI.token)}/accept`,{name:RI.name}); SESSION={businessId:r.businessId}; RI.step='done'; RI.err=''; }
     catch(err){ if(err.status===410) RI.gone=true; RI.err=err.message; } realInvite(); }
 },true);
 document.addEventListener('click',async e=>{
@@ -280,29 +343,31 @@ document.addEventListener('click',async e=>{
 });
 async function realResend(id){
   closeModal();
-  try{ const r=await API('POST','/api/invites/resend/'+encodeURIComponent(id)); applyServer(r.doc,r.version); render(); toast('New invite link sent · the old link no longer works'); if(r.devInviteLink) showDevLink(r.devInviteLink); }
+  try{ const r=await API('POST','/invites/resend/'+encodeURIComponent(id)); applyServer(r.doc,r.version); render(); if(r.shareLinks&&r.shareLinks.length) showShareLinks(r.shareLinks); else toast('New invite link sent · the old link no longer works'); }
   catch(err){ toast(esc(err.message)); }
 }
 
 /* ---------- sign up a new business (reuses the sign-up screens) ---------- */
 async function realSignupStart(){
   const d=SU.d, f=$('#suYou');
-  try{ busy(f,true); await API('POST','/api/signup/start',{name:d.name,email:d.email,phone:d.phone}); suGo('code'); }
-  catch(e){ suFail(e.data&&e.data.code==='exists'?'There’s already an account with this email. <a href="#login">Sign in instead</a>.':esc(e.message)); }
+  try{ busy(f,true); await sendCode(d.email,true,{name:d.name}); suGo('code'); }
+  catch(e){ suFail(esc(e.message)); }
 }
 async function realSignupVerify(){
   const f=$('#suCode');
-  try{ busy(f,true); const r=await API('POST','/api/signup/verify',{email:SU.d.email,code:digits($('#su-code').value)}); SU.token=r.token; suGo('business'); }
+  try{ busy(f,true); await verifyCode(SU.d.email,'email',digits($('#su-code').value),true);
+    const s=await API('GET','/session'); if(s.businesses&&s.businesses.length){ suFail('There’s already a DaySpear account with this email. <a href="#login">Sign in instead</a>.'); return; }
+    suGo('business'); }
   catch(e){ suFail(esc(e.message)); }
 }
 async function realCreateWorkspace(){
   const d=SU.d, f=$('#suTeam');
   try{ busy(f,true);
-    const r=await API('POST','/api/signup/complete',{token:SU.token, business:{name:d.biz.trim(),type:BIZ_TYPES[d.type][0]}, locations:d.locs.filter(L=>L.name.trim()), roles:d.roles,
+    const r=await API('POST','/signup/complete',{name:d.name, phone:d.phone, business:{name:d.biz.trim(),type:BIZ_TYPES[d.type][0]}, locations:d.locs.filter(L=>L.name.trim()), roles:d.roles,
       invites:d.invites.filter(v=>v.name.trim()&&v.contact.trim()), templates:d.templates});
-    SESSION=await API('GET','/api/session'); LOADED=false; UI.real=false; await loadWorkspace(); UI.set='business'; UI.taskTab='todos';
-    suGo('done'); (r.devInviteLinks||[]).forEach(showDevLink);
-  }catch(e){ suFail(esc(e.message)); }
+    SESSION={businessId:r.businessId}; await loadSession(); LOADED=false; UI.real=false; await loadWorkspace(); UI.set='business'; UI.taskTab='todos';
+    suGo('done'); if(r.shareLinks&&r.shareLinks.length) setTimeout(()=>showShareLinks(r.shareLinks),400);
+  }catch(e){ suFail(esc(e.data&&e.data.code==='exists'?e.message+' <a href="#login">Sign in</a>':e.message)); }
 }
 
 /* ---------- plan & billing (Stripe) ---------- */
@@ -318,10 +383,10 @@ function realUpgrade(plan,onOk,what){
     ${stripeNote()}${what?`<p class="muted" style="font-size:12px">After checkout, come back and ${/restor/i.test(what)?'restore them':'send the invite'} again.</p>`:''}
     ${PRICING.provisional?'<p class="muted" style="font-size:12px">Prices are provisional while DaySpear is in early access.</p>':''}
   </div><div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Not now</button><button type="button" class="btn btn-primary btn-sm" id="up-checkout" ${!CFG||CFG.stripe==='off'?'disabled':''}>Continue to secure checkout</button></div>`, m=>{
-    $('#up-checkout',m).onclick=async ev=>{ ev.target.disabled=true; try{ const r=await API('POST','/api/billing/checkout',{planId:plan.id}); location.href=r.url; }catch(err){ ev.target.disabled=false; toast(esc(err.message)); } };
+    $('#up-checkout',m).onclick=async ev=>{ ev.target.disabled=true; try{ const r=await API('POST','/billing/checkout',{planId:plan.id}); location.href=r.url; }catch(err){ ev.target.disabled=false; toast(esc(err.message)); } };
   });
 }
-async function openPortal(){ try{ const r=await API('POST','/api/billing/portal'); location.href=r.url; }catch(err){ toast(esc(err.message)); } }
+async function openPortal(){ try{ const r=await API('POST','/billing/portal'); location.href=r.url; }catch(err){ toast(esc(err.message)); } }
 function realPlanSection(){
   const n=activeCount(), cur=subPlan(), pend=pendingCount(), idx=PRICING.plans.indexOf(cur), next=PRICING.plans[idx+1], g=graceInfo(), b=D.billing||{};
   const owner=isOwner(ME_MGR), paid=cur.price>0;
@@ -346,7 +411,7 @@ function realPlanSection(){
 /* ---------- contact form ---------- */
 async function realContact(f){
   const val=id=>($('#'+id)||{}).value||'';
-  try{ busy(f,true); await API('POST','/api/contact',{name:val('c-name2'),email:val('c-email2'),business:val('c-biz'),size:val('c-size'),topic:val('c-topic'),message:val('c-msg')});
+  try{ busy(f,true); await API('POST','/contact',{name:val('c-name2'),email:val('c-email2'),business:val('c-biz'),size:val('c-size'),topic:val('c-topic'),message:val('c-msg')});
     const first=esc(val('c-name2').trim().split(' ')[0]);
     f.outerHTML=`<div class="contact-card sent-card" tabindex="-1" id="contactSent"><div class="ico">✓</div><h3 style="font-size:22px;margin-bottom:8px">Thanks, ${first}!</h3><p class="muted">We got your message and will reply by email.</p></div>`; $('#contactSent').focus(); }
   catch(e){ busy(f,false); const el=$('#contactErr'); el.textContent=e.message; el.hidden=false; }
@@ -383,12 +448,10 @@ function demoChrome(){
 
 async function boot(){
   const wantDemo=/[?&]demo\b/.test(location.search);
-  if(location.protocol.startsWith('http')&&!wantDemo){
-    try{ CFG=await API('GET','/api/config'); }catch(e){ CFG=null; }
-  }
+  if(SB_URL&&SB_KEY&&!wantDemo){ try{ CFG=await API('GET','/config'); }catch(e){ CFG=null; console.warn('DaySpear: couldn’t reach Supabase — showing the demo.', e); } }
   if(CFG&&CFG.plans){
     REAL=true; applyPricing(CFG); realChrome();
-    try{ const s=await API('GET','/api/session'); SESSION=s.signedIn&&s.current?s:null; }catch(e){ SESSION=null; }
+    if(store.get()){ try{ await loadSession(); }catch(e){ SESSION=null; } }
     if(SESSION&&location.hash.startsWith('#app')){ try{ await loadWorkspace(); }catch(e){ SESSION=null; } }
   } else demoChrome();
   route();

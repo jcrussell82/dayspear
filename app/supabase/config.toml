@@ -1,0 +1,40 @@
+# Supabase CLI settings for DaySpear (used by `supabase start` locally, and as a reference
+# for the hosted project — see README "Supabase Auth settings").
+project_id = "dayspear"
+
+[auth]
+enabled = true
+# The site's address. Change to your GitHub Pages / custom domain address for the hosted project.
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+# One code to the new address is enough when someone changes their email while signed in.
+double_confirm_changes = false
+otp_length = 6
+otp_expiry = 600
+
+# The emails show a 6-digit code (DaySpear uses codes, not links).
+[auth.email.template.magic_link]
+subject = "Your DaySpear sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Your DaySpear code"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new email for DaySpear"
+content_path = "./supabase/templates/email_change.html"
+
+# Text-message sign-in stays off until you connect Twilio (then also set SMS_ENABLED=true for the function).
+[auth.sms]
+enable_signup = false
+
+# The `api` function checks sessions itself; Stripe's webhook has no Supabase token.
+[functions.api]
+verify_jwt = false
