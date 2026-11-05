@@ -27,4 +27,4 @@ jobs:
         with: { version: latest }
       - run: supabase link --project-ref ${{ vars.SUPABASE_PROJECT_REF }}
       - run: supabase db push --db-url "$SUPABASE_DB_URL" --yes
-      - run: supabase functions deploy api --no-verify-jwt --project-ref ${{ vars.SUPABASE_PROJECT_REF }}
+      - run: supabase functions deploy api --no-verify-jwt --project-ref ${{ vars.SUPABASE_PROJECT_REF }} --yes
