@@ -11,7 +11,7 @@ jwt_expiry = 3600
 enable_signup = true
 
 [auth.email]
-enable_signup = true
+enabled = true
 enable_confirmations = true
 # One code to the new address is enough when someone changes their email while signed in.
 double_confirm_changes = false
@@ -33,7 +33,7 @@ content_path = "./supabase/templates/email_change.html"
 
 # Text-message sign-in stays off until you connect Twilio (then also set SMS_ENABLED=true for the function).
 [auth.sms]
-enable_signup = false
+enabled = false
 
 # The `api` function checks sessions itself; Stripe's webhook has no Supabase token.
 [functions.api]
