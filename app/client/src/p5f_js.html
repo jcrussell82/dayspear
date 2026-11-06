@@ -14,6 +14,16 @@ function tradeOptions(x){ return D.shifts.filter(y=>y.id!==x.id&&!y.draft&&!y.co
 // my upcoming shifts I could give in exchange for teammate shift y
 const myTradesFor = y=>D.settings.requests.namedSwaps===false?[]:D.shifts.filter(x=>x.emp===ME&&!x.draft&&!x.cover&&!isPast(x.w,x.d)).filter(x=>tradeOptions(x).some(o=>o.id===y.id));
 const canTradeFor = y=>y.emp&&y.emp!==ME&&!y.cover&&!y.draft&&!isPast(y.w,y.d)&&myTradesFor(y).length>0;
+// where a shift stands in a trade that involves me (Team view)
+function tradeChip(s){
+  const out=D.shifts.find(z=>z.cover&&z.cover.trade===s.id&&z.cover.from===ME);                 // their shift I asked for
+  if(out) return out.cover.status==='offered'?'<span class="pill pill-blue p-chip">Waiting on manager</span>':`<span class="pill pill-amber p-chip">Waiting on ${esc(firstOf(s.emp))}</span>`;
+  const c=s.cover;
+  if(c&&c.trade&&s.emp===ME) return `<span class="pill ${c.status==='offered'?'pill-blue':'pill-amber'} p-chip">Trade pending</span>`;   // my shift I offered
+  if(c&&c.trade&&c.target===ME) return c.status==='offered'?'<span class="pill pill-blue p-chip">Waiting on manager</span>':`<button class="btn btn-primary btn-xs" data-etab="shifts">Review trade</button>`; // someone asked me
+  if(s.emp===ME&&D.shifts.some(z=>z.cover&&z.cover.trade===s.id)) return '<span class="pill pill-amber p-chip">Asked to trade</span>';      // my shift someone wants
+  return '';
+}
 function pickups(){ return needsCover().filter(s=>s.emp!==ME&&s.cover.status==='needed'&&!s.cover.trade&&!s.draft&&PEOPLE[ME].locs.includes(s.loc)&&(!s.cover.target||s.cover.target===ME)&&!conflictsFor({...s,emp:ME},s.id).length); }
 function myTodos(){ const mine=new Set(D.shifts.filter(s=>s.emp===ME).map(s=>s.id)); return D.tasks.filter(t=>t.status!=='done'&&((t.assign.type==='person'&&t.assign.ref===ME)||(t.assign.type==='shift'&&mine.has(t.assign.ref))||(t.assign.type==='location'&&PEOPLE[ME].locs.includes(t.assign.ref)))); }
 function renderEmployee(){
@@ -46,7 +56,7 @@ function renderEmployee(){
       for(let d=0;d<7;d++){ const ss=mine.filter(s=>s.d===d); const to=timeOffFor(ME,w,d); const past=isPast(w,d);
         if(!ss.length&&!to) continue;
         body+= to&&!ss.length ? `<div class="p-shift p-off" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">Time off</div><div class="ss">${esc(to.reason)}</div></div><span class="pill ${to.status==='approved'?'pill-green':'pill-amber'}">${to.status==='approved'?'Approved':'Pending'}</span></div>`
-          : ss.map(s=>`<div class="p-shift" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">${span(s)}${isToday(w,d)?' <span class="pill pill-green">Today</span>':''}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}</div></div>${s.cover?`<span class="pill pill-amber">${s.cover.trade?'Trade pending':s.cover.status==='offered'?'Offer pending':'Posted'}</span>`:D.shifts.some(z=>z.cover&&z.cover.trade===s.id)?'<span class="pill pill-blue">Trade asked</span>':past?'':`<button class="btn btn-ghost btn-xs" data-esheet="cant|${s.id}">Can’t make it</button>`}</div>`).join('');
+          : ss.map(s=>`<div class="p-shift" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">${span(s)}${isToday(w,d)?' <span class="pill pill-green">Today</span>':''}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}</div></div>${s.cover?`<span class="pill pill-amber">${s.cover.trade?'Trade pending':s.cover.status==='offered'?'Offer pending':'Posted'}</span>`:D.shifts.some(z=>z.cover&&z.cover.trade===s.id)?'<span class="pill pill-amber">Asked to trade</span>':past?'':`<button class="btn btn-ghost btn-xs" data-esheet="cant|${s.id}">Can’t make it</button>`}</div>`).join('');
       }
       if(!mine.length) body+=`<p class="muted" style="font-size:13px">${D.shifts.some(s=>s.w===w&&!s.draft)?'You’re not scheduled this week.':'Not published yet.'}</p>`;
       body+=`</div>`;
@@ -57,7 +67,7 @@ function renderEmployee(){
         const ppl=new Set(all.filter(s=>s.emp).map(s=>s.emp)).size;
         body+=`<div class="p-card"><h4>${weekRel(w)} · ${weekLabel(w)} <span class="muted" style="font-weight:500;font-size:12px">${ppl} ${ppl===1?'person':'people'}</span></h4>`;
         for(let d=0;d<7;d++){ const ss=all.filter(s=>s.d===d); if(!ss.length) continue; const past=isPast(w,d);
-          body+=`<div class="p-day" style="${past?'opacity:.5':''}"><div class="p-dayh">${DAYS[d]} ${fmtNum(w,d)}${isToday(w,d)?' · Today':''}</div>${ss.map(s=>`<div class="p-team${s.emp===ME?' me':''}">${s.emp?avatar(s.emp,'sm'):'<span class="p-open">?</span>'}<span class="nm"><b>${s.emp===ME?'You':s.emp?esc(nameOf(s.emp)):'Open shift'}</b><small>${ROLES[s.role]}${locs.length>1?' · '+esc(LOCS[s.loc].name):''}${s.cover&&s.emp&&s.emp!==ME?' · needs cover':''}</small></span><span class="tm">${span(s)}</span>${pkIds.has(s.id)&&!past?`<button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button>`:canTradeFor(s)?`<button class="btn btn-ghost btn-xs" data-esheet="tradefor|${s.id}">Trade</button>`:''}</div>`).join('')}</div>`;
+          body+=`<div class="p-day" style="${past?'opacity:.5':''}"><div class="p-dayh">${DAYS[d]} ${fmtNum(w,d)}${isToday(w,d)?' · Today':''}</div>${ss.map(s=>`<div class="p-team${s.emp===ME?' me':''}">${s.emp?avatar(s.emp,'sm'):'<span class="p-open">?</span>'}<span class="nm"><b>${s.emp===ME?'You':s.emp?esc(nameOf(s.emp)):'Open shift'}</b><small>${ROLES[s.role]}${locs.length>1?' · '+esc(LOCS[s.loc].name):''}${s.cover&&s.emp&&s.emp!==ME&&!s.cover.trade?' · needs cover':''}</small></span><span class="tm">${span(s)}</span>${past?'':tradeChip(s)||(pkIds.has(s.id)?`<button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button>`:canTradeFor(s)?`<button class="btn btn-ghost btn-xs" data-esheet="tradefor|${s.id}">Trade</button>`:'')}</div>`).join('')}</div>`;
         }
         if(!all.length) body+=`<p class="muted" style="font-size:13px">Not published yet.</p>`;
         body+=`</div>`;
