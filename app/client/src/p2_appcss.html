@@ -233,6 +233,7 @@ button.stat-card:hover{border-color:var(--line-strong)}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px 20px;flex-wrap:wrap}
 .modal-foot .left{margin-right:auto;display:flex;gap:8px}
 .field{display:grid;gap:6px}
+.field[hidden],.row-2[hidden]{display:none}
 .field label,.field .lbl{font-size:12.5px;font-weight:600;color:var(--ink-2)}
 .field input,.field select,.field textarea{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);width:100%}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(77,128,245,.15)}
@@ -262,6 +263,27 @@ button.stat-card:hover{border-color:var(--line-strong)}
 .p-tabs button{border:0;background:none;display:grid;justify-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);padding:6px 0;position:relative}
 .p-tabs button.on{color:var(--ink)}
 .p-tabs button.on svg{color:var(--green-ink)}
+.p-trade{display:grid;gap:8px;padding:6px 0 10px;border-bottom:1px solid var(--line-2)}
+.p-trade:last-child{border-bottom:0;padding-bottom:0}
+.p-trade>p{font-size:13.5px}
+.p-tr-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;align-items:start;background:var(--surface-2);border-radius:12px;padding:9px 12px}
+.p-tr-row .lbl{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.p-tr-row b{display:block;font-size:13.5px}.p-tr-row small{display:block;color:var(--muted);font-size:12px}
+.p-tr-acts{display:flex;gap:8px;flex-wrap:wrap}
+.p-cov-r{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.p-brand{display:none}
+.p-sched-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.p-sched-top .ts-seg{width:auto;flex:1 1 160px}
+.p-day{padding:8px 0;border-bottom:1px solid var(--line-2)}
+.p-day:last-child{border-bottom:0}
+.p-dayh{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.p-team{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0}
+.p-team:has(.btn){grid-template-columns:auto minmax(0,1fr) auto auto}
+.p-team .nm b{display:block;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-team .nm small{display:block;color:var(--muted);font-size:12px}
+.p-team .tm{font-size:13px;font-weight:600;white-space:nowrap}
+.p-team.me .nm b{color:var(--green-ink)}
+.p-open{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--t-amber);color:var(--amber-ink);font-weight:700;font-size:13px}
 .p-tabs .badge{position:absolute;top:2px;left:55%;background:var(--amber);color:var(--deep);font-size:10px;border-radius:999px;padding:0 5px}
 .next-shift{background:var(--deep);color:#fff;border-radius:22px;padding:18px;position:relative;overflow:hidden}
 .next-shift::after{content:"";position:absolute;right:-30px;top:-30px;width:140px;height:140px;background:url('{{LOGOMARK}}') center/contain no-repeat;opacity:.1}

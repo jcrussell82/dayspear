@@ -37,7 +37,23 @@ function toCard(t){
       <button class="btn btn-ghost btn-xs" data-decline="${t.id}">Decline</button>
       <button class="btn btn-ghost btn-xs" data-viewweek="${t.w}">View on schedule</button></div></div></div>`;
 }
+function tradeCard(s){
+  const c=s.cover, y=shiftById(c.trade), a=c.from, b=c.target; const can=canManage(s.loc)&&(!y||canManage(y.loc));
+  if(!y) return '';
+  const cfA=conflictsFor({...y,emp:a},s.id).filter(k=>k.kind!=='loc'), cfB=conflictsFor({...s,emp:b},y.id).filter(k=>k.kind!=='loc');
+  const warn=[...cfA.map(k=>`${firstOf(a)}: ${k.kind==='overlap'?'overlaps another shift':k.kind==='unavail'?'marked unavailable':'has time off'}`),...cfB.map(k=>`${firstOf(b)}: ${k.kind==='overlap'?'overlaps another shift':k.kind==='unavail'?'marked unavailable':'has time off'}`)];
+  const head=`<div class="who"><b>Shift trade</b>${c.status==='offered'?'<span class="pill pill-blue">Both agreed · waiting on you</span>':`<span class="pill pill-amber">Waiting on ${esc(firstOf(b))}</span>`}</div>
+    <div class="meta"><b>${esc(firstOf(a))}</b> takes ${esc(firstOf(b))}’s ${fmtDay(y.w,y.d)} · ${span(y)} (${ROLES[y.role]}, ${LOCS[y.loc].name})</div>
+    <div class="meta"><b>${esc(firstOf(b))}</b> takes ${esc(firstOf(a))}’s ${fmtDay(s.w,s.d)} · ${span(s)} (${ROLES[s.role]}, ${LOCS[s.loc].name})</div>${c.note?`<div class="meta muted">“${esc(c.note)}”</div>`:''}
+    ${c.status==='offered'?(warn.length?`<div class="warn">⚠ ${esc(warn.join(' · '))}</div>`:'<div class="ok">✓ No conflicts for either person</div>'):''}`;
+  let act;
+  if(!can) act=`<div class="actions"><span class="muted" style="font-size:12.5px">Waiting on ${esc(mgrNames([...new Set([s.loc,y.loc])]))}</span><button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button></div>`;
+  else if(c.status==='offered') act=`<div class="actions"><button class="btn btn-primary btn-xs" data-approvetrade="${s.id}">Approve trade</button><button class="btn btn-ghost btn-xs" data-declinetrade="${s.id}">Decline</button><button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button></div>`;
+  else act=`<div class="actions"><button class="btn btn-ghost btn-xs" data-thread="${s.id}">${icon('chat',13)} Shift chat</button><button class="btn btn-ghost btn-xs" data-declinetrade="${s.id}">Cancel trade</button></div>`;
+  return `<div class="req ${c.status==='offered'&&can?'attn':''}"><div>${avatar(a,'lg')}</div><div>${head}${act}</div></div>`;
+}
 function covCard(s){
+  if(s.cover&&s.cover.trade) return tradeCard(s);
   const c=s.cover; const av=availableFor(s); const can=canManage(s.loc);
   const head=`<div class="who"><b>${fmtDay(s.w,s.d)} · ${span(s)}</b>${c.status==='needed'?`<span class="pill pill-amber">${s.emp?'Needs coverage':'Open shift'}</span>`:`<span class="pill pill-blue">Offer waiting on you</span>`}</div>
     <div class="meta">${ROLES[s.role]} · ${LOCS[s.loc].name} · ${s.emp?`posted by ${esc(firstOf(s.emp))}`:'unassigned'}${c.target?` · <b>asked ${esc(firstOf(c.target))} to swap</b>`:''}</div>${c.note?`<div class="meta muted">“${esc(c.note)}”</div>`:''}`;
@@ -69,3 +85,13 @@ function openTOModal(id){
   openModal(`${modalHead('Time-off request')}<div class="modal-body">${toCard(t).replace('class="req','class="req" style="border:0;padding:0" data-x="')}</div><div class="modal-foot"><button class="btn btn-ghost btn-sm" data-close>Close</button></div>`);
   if(t.status!=='pending') $('#modal .actions').innerHTML=`<span class="pill ${t.status==='approved'?'pill-green':'pill-gray'}">${t.status==='approved'?'Approved':'Declined'}</span>`;
 }
+
+// approving or declining a two-way trade (manager side)
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-approvetrade],[data-declinetrade]'); if(!t) return;
+  const x=shiftById(t.dataset.approvetrade||t.dataset.declinetrade); if(!x||!x.cover||!x.cover.trade) return; const y=shiftById(x.cover.trade), a=x.cover.from, b=x.cover.target;
+  if(t.dataset.declinetrade){ delete x.cover; commit(); toast(`Trade cancelled · ${esc(firstOf(a))} and ${esc(firstOf(b))} keep their own shifts`); return; }
+  if(!y||y.emp!==b||x.emp!==a){ delete x.cover; commit(); toast('One of the shifts changed, so this trade was cancelled'); return; }
+  D.coverLog.push({id:nid('c'),shiftId:x.id,from:a,to:b,when:nowStamp(),by:ME_MGR,trade:y.id},{id:nid('c'),shiftId:y.id,from:b,to:a,when:nowStamp(),by:ME_MGR,trade:x.id});
+  x.emp=b; y.emp=a; delete x.cover; commit(); toast(`Trade approved · ${esc(firstOf(a))} and ${esc(firstOf(b))} have been notified`);
+});

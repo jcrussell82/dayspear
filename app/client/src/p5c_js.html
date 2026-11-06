@@ -29,7 +29,7 @@ function renderSchedule(){
   const w=UI.week, loc=UI.loc, ws=shiftsIn(w);
   const people=EMP_IDS.filter(id=>loc==='all'||PEOPLE[id].locs.includes(loc));
   const totalH=ws.filter(s=>s.emp).reduce((a,s)=>a+hrs(s),0);
-  const cover=needsCover().filter(s=>s.w===w&&(loc==='all'||s.loc===loc));
+  const cover=needsCover().filter(s=>!s.cover.trade&&s.w===w&&(loc==='all'||s.loc===loc));
   const pto=pendingTO().filter(t=>t.w===w&&people.includes(t.emp));
   const working=new Set(ws.filter(s=>s.emp).map(s=>s.emp)).size;
 
@@ -90,9 +90,10 @@ function cell(emp,w,d,ws){
     const cf=conflictsFor(s,s.id).filter(c=>c.kind!=='loc');
     const c=s.cover; const ckl=s.ck?checklistById(s.ck):null;
     let flag='';
-    if(c&&c.status==='needed') flag=`<span class="flag" style="color:var(--amber-ink)">${s.emp?'Needs coverage':'Open'}</span>`;
-    if(c&&c.status==='offered') flag=`<span class="flag" style="color:var(--blue-ink)">${esc(firstOf(c.offerBy))} offered</span>`;
-    inner+=`<button class="shift ${rc(s.role)} ${s.draft?'draft':''} ${c&&c.status==='needed'?'needs':''} ${canManage(s.loc)?'':'ro'}" draggable="${canManage(s.loc)}" data-shift="${s.id}" aria-label="${esc(nameOf(s.emp))}, ${span(s)}, ${ROLES[s.role]}, ${LOCS[s.loc].name}">
+    if(c&&c.trade) flag=`<span class="flag" style="color:var(--blue-ink)">Trade with ${esc(firstOf(c.target))}</span>`;
+    else if(c&&c.status==='needed') flag=`<span class="flag" style="color:var(--amber-ink)">${s.emp?'Needs coverage':'Open'}</span>`;
+    else if(c&&c.status==='offered') flag=`<span class="flag" style="color:var(--blue-ink)">${esc(firstOf(c.offerBy))} offered</span>`;
+    inner+=`<button class="shift ${rc(s.role)} ${s.draft?'draft':''} ${c&&c.status==='needed'&&!c.trade?'needs':''} ${canManage(s.loc)?'':'ro'}" draggable="${canManage(s.loc)}" data-shift="${s.id}" aria-label="${esc(nameOf(s.emp))}, ${span(s)}, ${ROLES[s.role]}, ${LOCS[s.loc].name}">
       <div class="t"><span>${span(s)}</span>${UI.loc==='all'?`<span class="loc-tag" style="font-size:10px;font-weight:600;color:var(--muted)">${LOCS[s.loc].short}</span>`:''}</div>
       <div class="r">${ROLES[s.role]}</div>
       ${ckl?`<div class="ck">${icon('check',11)} ${esc(ckl.name)}</div>`:''}

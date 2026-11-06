@@ -435,7 +435,32 @@ function realChrome(){
     body.real.is-emp .emp-notes, body.real.is-emp .p-status{display:none}
     body.real.is-emp .phone{width:100%;max-width:520px;height:100%;border-radius:0;padding:0;box-shadow:none;background:none}
     body.real.is-emp .phone-screen{border-radius:0}
-    @media (min-width:600px){ body.real.is-emp .phone{border-left:1px solid var(--line);border-right:1px solid var(--line)} }`);
+    @media (min-width:600px) and (max-width:979px){ body.real.is-emp .phone{border-left:1px solid var(--line);border-right:1px solid var(--line)} }
+    /* on a computer: a sidebar and a wider page instead of the phone layout */
+    @media (min-width:980px){
+      body.real.is-emp .phone{max-width:none}
+      body.real.is-emp .phone-screen{display:grid;grid-template-columns:248px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+      body.real.is-emp .p-tabs{grid-column:1;grid-row:1/-1;display:flex;flex-direction:column;gap:2px;padding:18px 14px;border-top:0;border-right:1px solid var(--line)}
+      body.real.is-emp .p-brand{display:flex;align-items:center;gap:10px;padding:2px 8px 20px}
+      body.real.is-emp .p-brand img{width:30px;height:30px;flex:none}
+      body.real.is-emp .p-brand b{display:block;font-size:14px;line-height:1.2}
+      body.real.is-emp .p-brand small{display:block;color:var(--muted);font-size:12px;font-weight:500}
+      body.real.is-emp .p-tabs button{display:flex;align-items:center;gap:12px;font-size:14px;padding:10px 12px;border-radius:12px;color:var(--ink-2);text-align:left}
+      body.real.is-emp .p-tabs button svg{width:19px;height:19px}
+      body.real.is-emp .p-tabs button:hover{background:var(--surface-2)}
+      body.real.is-emp .p-tabs button.on{background:var(--surface-2);color:var(--ink)}
+      body.real.is-emp .p-tabs .badge{position:static;margin-left:auto}
+      body.real.is-emp .p-head{grid-column:2;grid-row:1;padding:20px 40px 16px}
+      body.real.is-emp .p-head h2{font-size:24px}
+      body.real.is-emp .p-head .sg-name{display:none}
+      body.real.is-emp .p-body{grid-column:2;grid-row:2;padding:28px 40px 56px;justify-content:center;grid-template-columns:minmax(0,760px)}
+      body.real.is-emp .p-body.tab-home, body.real.is-emp .p-body.tab-schedule, body.real.is-emp .p-body.tab-shifts{grid-template-columns:repeat(2,minmax(0,480px));align-items:start}
+      body.real.is-emp .p-body .p-wide{grid-column:1/-1}
+      body.real.is-emp .composer{grid-column:2;grid-row:3;padding:14px 40px}
+      body.real.is-emp .sheet{align-items:center;justify-content:center}
+      body.real.is-emp .sheet-panel{max-width:480px;border-radius:20px;padding:22px 24px}
+      body.real.is-emp .sheet-panel .grab{display:none}
+    }`);
   // the employee preview is a demo feature: real managers don't get it
   addStyle(`body.real #app .mob-nav button[data-go="employee"]{display:none!important} @media (max-width:900px){ body.real #app .mob-nav{grid-template-columns:repeat(5,1fr)} }`);
   // the preview links on the homepage open the demo (sample data) instead of a real account

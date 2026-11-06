@@ -3,7 +3,15 @@
 let ME='e1';
 const relDay=(w,d)=>{const diff=(7*w+d)-(7*todayW+todayD); return diff===0?'Today':diff===1?'Tomorrow':fmtDay(w,d);};
 function myUpcoming(){ return D.shifts.filter(s=>s.emp===ME&&!isPast(s.w,s.d)&&!s.draft).sort((a,b)=>a.w-b.w||a.d-b.d||toMin(a.s)-toMin(b.s)); }
-function pickups(){ return needsCover().filter(s=>s.emp!==ME&&s.cover.status==='needed'&&!s.draft&&PEOPLE[ME].locs.includes(s.loc)&&(!s.cover.target||s.cover.target===ME)&&!conflictsFor({...s,emp:ME},s.id).length); }
+const tradeFor = s=>s&&s.cover&&s.cover.trade?shiftById(s.cover.trade):null;
+const shLine = s=>`${fmtDay(s.w,s.d)} · ${span(s)}`;
+// trades someone has asked ME to accept
+function tradesForMe(){ return D.shifts.filter(s=>s.cover&&s.cover.trade&&s.cover.target===ME&&s.cover.status==='needed'&&!s.draft&&!isPast(s.w,s.d)&&tradeFor(s)); }
+// teammates' shifts I could take in exchange for my shift x (both sides free, both work at both locations)
+function tradeOptions(x){ return D.shifts.filter(y=>y.id!==x.id&&!y.draft&&!y.cover&&y.emp&&y.emp!==ME&&PEOPLE[y.emp]&&PEOPLE[y.emp].status==='active'&&!isPast(y.w,y.d)
+  &&PEOPLE[ME].locs.includes(y.loc)&&(PEOPLE[y.emp].locs||[]).includes(x.loc)&&!D.shifts.some(z=>z.cover&&z.cover.trade===y.id)
+  &&!conflictsFor({...y,emp:ME},x.id).length&&!conflictsFor({...x,emp:y.emp},y.id).length).sort((a,b)=>a.w-b.w||a.d-b.d||toMin(a.s)-toMin(b.s)); }
+function pickups(){ return needsCover().filter(s=>s.emp!==ME&&s.cover.status==='needed'&&!s.cover.trade&&!s.draft&&PEOPLE[ME].locs.includes(s.loc)&&(!s.cover.target||s.cover.target===ME)&&!conflictsFor({...s,emp:ME},s.id).length); }
 function myTodos(){ const mine=new Set(D.shifts.filter(s=>s.emp===ME).map(s=>s.id)); return D.tasks.filter(t=>t.status!=='done'&&((t.assign.type==='person'&&t.assign.ref===ME)||(t.assign.type==='shift'&&mine.has(t.assign.ref))||(t.assign.type==='location'&&PEOPLE[ME].locs.includes(t.assign.ref)))); }
 function renderEmployee(){
   if(!PEOPLE[ME]||PEOPLE[ME].status!=='active'){ $('#v-employee').innerHTML=`<div class="empty" style="max-width:520px;margin:40px auto;padding:40px 28px"><h3 style="font-size:20px;margin-bottom:8px">No employee to preview yet</h3><p style="margin-bottom:16px">Once someone accepts their invite, this is where you’d see DaySpear through their eyes. The sample bakery has an employee preview you can explore.</p><button class="btn btn-ghost btn-sm" data-go="schedule">Back to schedule</button></div>`; return; }
@@ -21,33 +29,55 @@ function renderEmployee(){
     } else body+=`<div class="p-card"><h4>No upcoming shifts</h4><p class="muted">Nothing published for you yet.</p></div>`;
     if(unreadAnn.length){ const a=unreadAnn[0]; body+=`<div class="p-card" style="border-color:var(--mint)"><h4><span>${icon('megaphone',14)} ${esc(a.title)}</span></h4><p style="font-size:13.5px;color:var(--ink-2)">${esc(a.text)}</p><button class="btn btn-primary btn-xs" style="margin-top:10px" data-eread="${a.id}">Got it</button></div>`; }
     body+=bdayHTML();
+    { const tr=tradesForMe(); if(tr.length) body+=`<button class="p-card" data-etab="shifts" style="text-align:left;display:flex;gap:12px;align-items:center;background:var(--t-blue,var(--surface));border-color:var(--b-blue,var(--line-2))"><span style="font-size:22px">🔁</span><span style="flex:1"><b style="display:block">${esc(firstOf(tr[0].emp))}${tr.length>1?` and ${tr.length-1} more`:''} asked to trade shifts</b><span class="muted" style="font-size:12.5px">Review it under Shifts</span></span></button>`; }
     if(pk.length) body+=`<button class="p-card" data-etab="shifts" style="text-align:left;display:flex;gap:12px;align-items:center;background:var(--t-amber);border-color:var(--b-amber)"><span style="font-size:22px">🙋</span><span style="flex:1"><b style="display:block">${pk.length} open shift${pk.length>1?'s':''} you can pick up</b><span class="muted" style="font-size:12.5px">Earn extra hours this week</span></span></button>`;
     const td=myTodos(); body+=`<div class="p-card"><h4>Your to-dos <span class="muted" style="font-weight:500;font-size:12px">${td.length}</span></h4>${td.map(t=>`<label class="cl-item" style="padding:7px 2px"><input type="checkbox" data-taskdone="${t.id}"><span>${esc(t.title)}<br><span style="font-size:11.5px">${assignTag(t.assign)} ${subProg(t)}</span></span></label>${(t.items||[]).length?`<div class="sub-items">${t.items.map((it,i)=>`<label class="cl-item ${it.done?'done':''}"><input type="checkbox" data-subitem="${t.id}|${i}" ${it.done?'checked':''}><span>${esc(it.t)}</span></label>`).join('')}</div>`:''}`).join('')||'<p class="muted" style="font-size:13px">Nothing for now.</p>'}</div>`;
     body+=`<button class="btn btn-ghost" data-esheet="timeoff">${icon('sun',16)} Request time off</button>`;
   }
   if(tab==='schedule'){
-    title='My schedule';
-    body+=`<button class="btn btn-primary btn-sm" data-esheet="timeoff">${icon('sun',15)} Request time off</button>`;
-    for(const w of [0,1]){
+    const sv=UI.emp.sched||'mine'; title=sv==='team'?'Team schedule':'My schedule';
+    body+=`<div class="p-wide p-sched-top"><div class="ts-seg" role="group" aria-label="Whose schedule">${[['mine','Mine'],['team','Team']].map(([k,l])=>`<button type="button" data-esched="${k}" class="${sv===k?'on':''}" aria-pressed="${sv===k}">${l}</button>`).join('')}</div><button class="btn btn-primary btn-sm" data-esheet="timeoff">${icon('sun',15)} Request time off</button></div>`;
+    if(sv==='mine') for(const w of [0,1]){
       const mine=D.shifts.filter(s=>s.emp===ME&&s.w===w&&!s.draft);
       body+=`<div class="p-card"><h4>${weekRel(w)} · ${weekLabel(w)} <span class="muted" style="font-weight:500;font-size:12px">${fmtH(mine.reduce((a,s)=>a+hrs(s),0))}</span></h4>`;
       for(let d=0;d<7;d++){ const ss=mine.filter(s=>s.d===d); const to=timeOffFor(ME,w,d); const past=isPast(w,d);
         if(!ss.length&&!to) continue;
         body+= to&&!ss.length ? `<div class="p-shift p-off" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">Time off</div><div class="ss">${esc(to.reason)}</div></div><span class="pill ${to.status==='approved'?'pill-green':'pill-amber'}">${to.status==='approved'?'Approved':'Pending'}</span></div>`
-          : ss.map(s=>`<div class="p-shift" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}</div></div>${s.cover?`<span class="pill pill-amber">${s.cover.status==='offered'?'Offer pending':'Posted'}</span>`:isToday(w,d)?'<span class="pill pill-green">Today</span>':''}</div>`).join('');
+          : ss.map(s=>`<div class="p-shift" style="${past?'opacity:.5':''}"><div class="p-date"><small>${DAYS[d]}</small><b>${fmtNum(w,d)}</b></div><div><div class="tt">${span(s)}${isToday(w,d)?' <span class="pill pill-green">Today</span>':''}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}</div></div>${s.cover?`<span class="pill pill-amber">${s.cover.trade?'Trade pending':s.cover.status==='offered'?'Offer pending':'Posted'}</span>`:D.shifts.some(z=>z.cover&&z.cover.trade===s.id)?'<span class="pill pill-blue">Trade asked</span>':past?'':`<button class="btn btn-ghost btn-xs" data-esheet="cant|${s.id}">Can’t make it</button>`}</div>`).join('');
       }
-      if(!mine.length) body+=`<p class="muted" style="font-size:13px">Not published yet.</p>`;
+      if(!mine.length) body+=`<p class="muted" style="font-size:13px">${D.shifts.some(s=>s.w===w&&!s.draft)?'You’re not scheduled this week.':'Not published yet.'}</p>`;
       body+=`</div>`;
+    }
+    else { const locs=PEOPLE[ME].locs; const pkIds=new Set(pk.map(x=>x.id));
+      for(const w of [0,1]){
+        const all=D.shifts.filter(s=>s.w===w&&!s.draft&&locs.includes(s.loc)).sort((a,b)=>a.d-b.d||toMin(a.s)-toMin(b.s));
+        const ppl=new Set(all.filter(s=>s.emp).map(s=>s.emp)).size;
+        body+=`<div class="p-card"><h4>${weekRel(w)} · ${weekLabel(w)} <span class="muted" style="font-weight:500;font-size:12px">${ppl} ${ppl===1?'person':'people'}</span></h4>`;
+        for(let d=0;d<7;d++){ const ss=all.filter(s=>s.d===d); if(!ss.length) continue; const past=isPast(w,d);
+          body+=`<div class="p-day" style="${past?'opacity:.5':''}"><div class="p-dayh">${DAYS[d]} ${fmtNum(w,d)}${isToday(w,d)?' · Today':''}</div>${ss.map(s=>`<div class="p-team${s.emp===ME?' me':''}">${s.emp?avatar(s.emp,'sm'):'<span class="p-open">?</span>'}<span class="nm"><b>${s.emp===ME?'You':s.emp?esc(nameOf(s.emp)):'Open shift'}</b><small>${ROLES[s.role]}${locs.length>1?' · '+esc(LOCS[s.loc].name):''}${s.cover&&s.emp&&s.emp!==ME?' · needs cover':''}</small></span><span class="tm">${span(s)}</span>${pkIds.has(s.id)&&!past?`<button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button>`:''}</div>`).join('')}</div>`;
+        }
+        if(!all.length) body+=`<p class="muted" style="font-size:13px">Not published yet.</p>`;
+        body+=`</div>`;
+      }
+      body+=`<p class="muted p-wide" style="font-size:12px">Shows published shifts at ${esc(locNames(locs))}. Can’t make one of yours? Use <b>Can’t make it</b> under Mine to ask everyone or one teammate.</p>`;
     }
   }
   if(tab==='shifts'){
     title='Shifts';
     body+=`<div class="p-card"><h4>Open shifts you can pick up</h4>${pk.map(s=>`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${ROLES[s.role]} · ${LOCS[s.loc].name}${s.cover.target===ME?` · <b style="color:var(--blue-ink)">${esc(firstOf(s.emp))} asked you</b>`:s.emp?` · from ${esc(firstOf(s.emp))}`:''}</div></div><button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button></div>`).join('')||'<p class="muted" style="font-size:13px">Nothing open that fits your schedule right now.</p>'}
       <p class="muted" style="font-size:11.5px;margin-top:8px">Only shifts at your locations that don’t clash with your schedule or time off are shown.</p></div>`;
-    const mineCov=D.shifts.filter(s=>s.cover&&(s.cover.offerBy===ME||(s.cover.from===ME&&s.emp===ME)));
+    const tr=tradesForMe();
+    if(tr.length) body+=`<div class="p-card p-wide" style="border-color:var(--b-blue,var(--line-2))"><h4>Trade requests for you</h4>${tr.map(x=>{ const y=tradeFor(x); return `<div class="p-trade"><p><b>${esc(firstOf(x.emp))}</b> wants to trade shifts${x.cover.note?` · “${esc(x.cover.note)}”`:''}</p>
+      <div class="p-tr-row"><span class="lbl">You’d work</span><span><b>${shLine(x)}</b><small>${ROLES[x.role]} · ${esc(LOCS[x.loc].name)}</small></span></div>
+      <div class="p-tr-row"><span class="lbl">${esc(firstOf(x.emp))} takes</span><span><b>${shLine(y)}</b><small>your ${ROLES[y.role]} shift · ${esc(LOCS[y.loc].name)}</small></span></div>
+      <div class="p-tr-acts"><button class="btn btn-green btn-xs" data-etradeok="${x.id}">Accept trade</button><button class="btn btn-ghost btn-xs" data-etradeno="${x.id}">Decline</button><button class="btn btn-ghost btn-xs" data-ethread="${x.id}">${icon('chat',13)} Chat</button></div>
+      <p class="muted" style="font-size:11.5px">${D.settings.requests.autoApprove?'Accepting swaps the shifts right away.':`Then ${esc(mgrNames([x.loc]))} approves it. Until then, you both keep your own shifts.`}</p></div>`; }).join('')}</div>`;
+    const mineCov=D.shifts.filter(s=>s.cover&&!isPast(s.w,s.d)&&(s.cover.offerBy===ME||(s.cover.from===ME&&s.emp===ME)));
+    const covText=c=>c.offerBy===ME?(c.trade?'You accepted a trade':'You offered to cover'):c.trade?'Trade with '+esc(firstOf(c.target))+' for '+(tradeFor({cover:c})?shLine(tradeFor({cover:c})):'their shift'):c.target?'You asked '+esc(firstOf(c.target)):'You asked for coverage';
+    const covPill=c=>c.status==='offered'?'<span class="pill pill-blue">Waiting on manager</span>':c.trade?`<span class="pill pill-amber">Waiting on ${esc(firstOf(c.target))}</span>`:'<span class="pill pill-amber">Still needed</span>';
     const won=D.coverLog.filter(l=>l.to===ME||l.from===ME);
-    body+=`<div class="p-card"><h4>Your swap &amp; coverage requests</h4>${mineCov.map(s=>`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${s.cover.offerBy===ME?'You offered to cover':s.cover.target?'You asked '+esc(firstOf(s.cover.target)):'You asked for coverage'}</div></div><span class="pill ${s.cover.status==='offered'?'pill-blue':'pill-amber'}">${s.cover.status==='offered'?'Waiting on manager':'Still needed'}</span></div>`).join('')}
-      ${won.map(l=>{const s=shiftById(l.shiftId); return s?`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${l.to===ME?'You picked this up':'Covered by '+esc(firstOf(l.to))}</div></div><span class="pill pill-green">Covered</span></div>`:'';}).join('')}
+    body+=`<div class="p-card"><h4>Your swap &amp; coverage requests</h4>${mineCov.map(s=>`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${covText(s.cover)}</div></div><span class="p-cov-r">${covPill(s.cover)}${s.cover.from===ME&&s.emp===ME&&s.cover.status==='needed'?`<button class="btn btn-ghost btn-xs" data-ecancel="${s.id}">Cancel</button>`:''}</span></div>`).join('')}
+      ${won.map(l=>{const s=shiftById(l.shiftId); return s?`<div class="p-shift"><div class="p-date"><small>${DAYS[s.d]}</small><b>${fmtNum(s.w,s.d)}</b></div><div><div class="tt">${span(s)}</div><div class="ss">${l.trade?(l.to===ME?'You got this in a trade':'Traded to '+esc(firstOf(l.to))):l.to===ME?'You picked this up':'Covered by '+esc(firstOf(l.to))}</div></div><span class="pill pill-green">${l.trade?'Traded':'Covered'}</span></div>`:'';}).join('')}
       ${!mineCov.length&&!won.length?'<p class="muted" style="font-size:13px">No requests yet.</p>':''}</div>`;
     const myTO=D.timeoff.filter(t=>t.emp===ME).sort((a,b)=>b.w-a.w||b.d-a.d);
     body+=`<div class="p-card"><h4>Time-off requests <button class="btn btn-ghost btn-xs" data-esheet="timeoff">${icon('plus',12)} New</button></h4>${myTO.map(t=>`<div class="p-shift p-off"><div class="p-date"><small>${DAYS[t.d]}</small><b>${fmtNum(t.w,t.d)}</b></div><div><div class="tt">All day</div><div class="ss">${esc(t.reason)}</div></div><span class="pill ${t.status==='approved'?'pill-green':t.status==='pending'?'pill-amber':'pill-gray'}">${t.status[0].toUpperCase()+t.status.slice(1)}</span></div>`).join('')||'<p class="muted" style="font-size:13px">None yet.</p>'}</div>`;
@@ -82,9 +112,9 @@ function renderEmployee(){
     <div class="phone"><div class="phone-screen ${isDark(PEOPLE[ME].theme)?'dark':''}">
       <div class="p-status"><span>9:41</span><span>●●● ▮</span></div>
       <div class="p-head"><button class="sg-name" data-etab="profile" aria-label="Your profile">${avatar(ME)}</button><h2>${esc(title)}</h2><button class="icon-btn" data-etab="chat" aria-label="Notifications">${icon('bell',18)}</button></div>
-      <div class="p-body" id="pbody">${body}</div>
+      <div class="p-body tab-${tab}${UI.emp.thread?' in-thread':''}" id="pbody">${body}</div>
       ${showComposer?`<form class="composer" id="eMsgForm" style="background:var(--surface)"><input id="eMsgText" placeholder="Message…" aria-label="Message" autocomplete="off"><button class="btn btn-primary btn-sm" type="submit" aria-label="Send">${icon('send',14)}</button></form>`:''}
-      <nav class="p-tabs">${tabs.map(([id,ic,l])=>`<button data-etab="${id}" class="${tab===id?'on':''}">${icon(ic,22)}${l}${id==='shifts'&&pk.length?`<span class="badge">${pk.length}</span>`:''}${id==='chat'&&unreadAnn.length?`<span class="badge">${unreadAnn.length}</span>`:''}</button>`).join('')}</nav>
+      <nav class="p-tabs"><div class="p-brand"><img src="{{LOGOMARK}}" alt=""><span><b>${esc(D.settings.business.name)}</b><small>${esc(PEOPLE[ME].name)}</small></span></div>${tabs.map(([id,ic,l])=>`<button data-etab="${id}" class="${tab===id?'on':''}">${icon(ic,22)}${l}${id==='shifts'&&pk.length?`<span class="badge">${pk.length}</span>`:''}${id==='chat'&&unreadAnn.length?`<span class="badge">${unreadAnn.length}</span>`:''}</button>`).join('')}</nav>
       <div class="sheet" id="esheet"><div class="sheet-panel" id="esheetPanel"></div></div>
     </div></div></div>`;
   if(showComposer){ const pb=$('#pbody'); pb.scrollTop=pb.scrollHeight; }
@@ -124,17 +154,25 @@ function openSheet(kind, arg){
       D.timeoff.push(rec); closeSheet(); commit(); toast(`Request sent to ${esc(mgrNames(PEOPLE[ME].locs))} · shows as pending on the schedule`); };
   }
   if(kind==='cant'){
-    const s=shiftById(arg); const R=D.settings.requests; const mates=availableFor(s);
+    const s=shiftById(arg); const R=D.settings.requests; const mates=availableFor(s); const trades=tradeOptions(s);
     p.innerHTML=`<div class="grab"></div><h3>Can’t make ${relDay(s.w,s.d)==='Today'?'today’s':DAYS[s.d]+'’s'} shift?</h3><p class="muted" style="font-size:13.5px">${fmtDay(s.w,s.d)} · ${span(s)} · ${ROLES[s.role]}</p>
       <form id="cantForm" style="display:grid;gap:12px">
-      ${R.namedSwaps?`<div class="ts-seg" role="group" aria-label="Who to ask"><button type="button" class="on" data-cwho="any">Anyone eligible</button><button type="button" data-cwho="named">A specific teammate</button></div>
+      ${R.namedSwaps?`<div class="ts-seg" role="group" aria-label="Who to ask"><button type="button" class="on" data-cwho="any">Anyone</button><button type="button" data-cwho="named">A teammate</button><button type="button" data-cwho="trade">Trade</button></div>
+      <div class="field" id="cant-trade-f" hidden><label for="cant-trade">Swap for</label><select id="cant-trade">${trades.map(y=>`<option value="${y.id}">${esc(firstOf(y.emp))} · ${DAYS[y.d]} ${fmtNum(y.w,y.d)} · ${span(y)}${y.loc!==s.loc?' · '+esc(LOCS[y.loc].name):''}</option>`).join('')||'<option value="">No shifts to trade for</option>'}</select><span class="muted" style="font-size:12px">You’d take their shift; they’d take yours. Only shifts that fit both schedules are listed.</span></div>
       <div class="field" id="cant-mate-f" hidden><label for="cant-mate">Ask</label><select id="cant-mate">${mates.map(i=>`<option value="${i}">${esc(PEOPLE[i].name)}</option>`).join('')||'<option value="">No one is free then</option>'}</select><span class="muted" style="font-size:12px">Only teammates without a conflict are listed.</span></div>`:''}
       <div class="field"><label for="cant-why">Note <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="cant-why" rows="2" placeholder="e.g. Car trouble, happy to swap"></textarea></div>
-      <div class="alert amber">You stay on this shift until ${R.autoApprove?'someone takes it':esc(mgrNames([s.loc]))+' approves someone to cover it'}.</div>
-      <button class="btn btn-primary" type="submit">Ask for coverage</button><button class="btn btn-ghost" type="button" data-eclose>Cancel</button></form>`;
+      <div class="alert amber" id="cant-alert">You stay on this shift until ${R.autoApprove?'someone takes it':esc(mgrNames([s.loc]))+' approves someone to cover it'}.</div>
+      <button class="btn btn-primary" type="submit" id="cant-go">Ask for coverage</button><button class="btn btn-ghost" type="button" data-eclose>Cancel</button></form>`;
     let who='any';
-    $$('[data-cwho]',p).forEach(b=>b.onclick=()=>{ who=b.dataset.cwho; $$('[data-cwho]',p).forEach(x=>x.classList.toggle('on',x===b)); $('#cant-mate-f').hidden=who!=='named'; });
-    $('#cantForm').onsubmit=ev=>{ ev.preventDefault(); const target=who==='named'?$('#cant-mate').value:''; if(who==='named'&&!target) return;
+    $$('[data-cwho]',p).forEach(b=>b.onclick=()=>{ who=b.dataset.cwho; $$('[data-cwho]',p).forEach(x=>x.classList.toggle('on',x===b)); $('#cant-mate-f').hidden=who!=='named'; $('#cant-trade-f').hidden=who!=='trade';
+      $('#cant-go').textContent=who==='trade'?'Ask to trade':'Ask for coverage';
+      $('#cant-alert').textContent=who==='trade'?`Nothing changes until your teammate accepts${R.autoApprove?'':' and '+mgrNames([s.loc])+' approves'}.`:`You stay on this shift until ${R.autoApprove?'someone takes it':mgrNames([s.loc])+' approves someone to cover it'}.`; });
+    $('#cantForm').onsubmit=ev=>{ ev.preventDefault();
+      if(who==='trade'){ const y=shiftById($('#cant-trade').value); if(!y) return; const b=y.emp;
+        s.cover={status:'needed',from:ME,note:$('#cant-why').value.trim(),target:b,trade:y.id};
+        const k='sh-'+s.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:`@${firstOf(b)} want to trade? I’d take your ${DAYS[y.d]} ${span(y)}.`+(s.cover.note?' — '+s.cover.note:''),when:nowStamp()});
+        closeSheet(); commit(); toast(`Trade request sent to ${esc(firstOf(b))}`); return; }
+      const target=who==='named'?$('#cant-mate').value:''; if(who==='named'&&!target) return;
       s.cover={status:'needed',from:ME,note:$('#cant-why').value.trim()}; if(target) s.cover.target=target;
       const k='sh-'+s.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:(target?`@${firstOf(target)} could you take this one?`:'I can’t make this one. Can anyone cover?')+(s.cover.note?' — '+s.cover.note:''),when:nowStamp()});
       closeSheet(); commit(); toast(target?`Asked ${esc(firstOf(target))} · ${esc(mgrNames([s.loc]))} can see it in Requests`:`Posted · eligible teammates and ${esc(mgrNames([s.loc]))} were notified`); };
@@ -142,3 +180,17 @@ function openSheet(kind, arg){
   sh.classList.add('open'); const f=p.querySelector('select,textarea'); f&&f.focus();
 }
 function closeSheet(){ const s=$('#esheet'); s&&s.classList.remove('open'); }
+
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-esched]'); if(!b) return; UI.emp.sched=b.dataset.esched; render(); });
+
+// trades and withdrawing a request (employee side)
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-etradeok],[data-etradeno],[data-ecancel]'); if(!t) return; const ds=t.dataset;
+  if(ds.ecancel){ const s=shiftById(ds.ecancel); if(!s||!s.cover) return; delete s.cover; commit(); toast('Request withdrawn · you’re still on this shift'); return; }
+  const x=shiftById(ds.etradeok||ds.etradeno); if(!x||!x.cover||!x.cover.trade) return; const y=tradeFor(x), a=x.cover.from, k='sh-'+x.id;
+  if(ds.etradeno){ delete x.cover; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:'Sorry, I can’t trade this time.',when:nowStamp()}); commit(); toast(`Declined · ${esc(firstOf(a))} keeps their shift`); return; }
+  (D.messages[k]=D.messages[k]||[]).push({from:ME,text:'Trade accepted 👍',when:nowStamp()});
+  if(D.settings.requests.autoApprove&&!REAL){ D.coverLog.push({id:nid('c'),shiftId:x.id,from:a,to:ME,when:nowStamp(),by:'auto',trade:y.id},{id:nid('c'),shiftId:y.id,from:ME,to:a,when:nowStamp(),by:'auto',trade:x.id}); x.emp=ME; y.emp=a; delete x.cover; commit(); toast('Traded — both schedules are updated'); return; }
+  x.cover.status='offered'; x.cover.offerBy=ME; commit();
+  toast(D.settings.requests.autoApprove?'Traded — both schedules are updated':`Accepted · ${esc(mgrNames([x.loc]))} will approve the trade`);
+});
