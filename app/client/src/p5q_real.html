@@ -428,6 +428,14 @@ function addStyle(css){ const s=document.createElement('style'); s.textContent=c
 function realChrome(){
   document.body.classList.add('real');
   addStyle(`body.real.is-emp #app .sidebar, body.real.is-emp #app .mob-nav, body.real.is-emp #app #topbar{display:none!important}`);
+  // a real employee gets the phone app itself at every screen size: no demo notes, no fake phone frame
+  addStyle(`body.real.is-emp #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+    body.real.is-emp #app .view#v-employee{padding:0;border-radius:0;overflow:hidden;background:var(--surface-2)}
+    body.real.is-emp .emp-stage{display:flex;justify-content:center;max-width:none;height:100%;padding:0;margin:0}
+    body.real.is-emp .emp-notes, body.real.is-emp .p-status{display:none}
+    body.real.is-emp .phone{width:100%;max-width:520px;height:100%;border-radius:0;padding:0;box-shadow:none;background:none}
+    body.real.is-emp .phone-screen{border-radius:0}
+    @media (min-width:600px){ body.real.is-emp .phone{border-left:1px solid var(--line);border-right:1px solid var(--line)} }`);
   // the employee preview is a demo feature: real managers don't get it
   addStyle(`body.real #app .mob-nav button[data-go="employee"]{display:none!important} @media (max-width:900px){ body.real #app .mob-nav{grid-template-columns:repeat(5,1fr)} }`);
   // the preview links on the homepage open the demo (sample data) instead of a real account
