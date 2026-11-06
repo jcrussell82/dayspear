@@ -21,6 +21,7 @@ export const db = {
   all: (table, filter) => call('GET', `${table}?${filter}`),
   insert: (table, row, prefer = 'return=minimal') => call('POST', table, row, prefer),
   update: (table, filter, patch) => call('PATCH', `${table}?${filter}`, patch, 'return=representation'),
+  remove: (table, filter) => call('DELETE', `${table}?${filter}`, undefined, 'return=minimal'),
   rpc: async (fn, args) => {
     const r = await fetch(`${config.supabaseUrl}/rest/v1/rpc/${fn}`, { method: 'POST', headers: headers(), body: JSON.stringify(args) });
     const text = await r.text(); const data = text ? JSON.parse(text) : null;

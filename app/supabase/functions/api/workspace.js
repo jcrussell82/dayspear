@@ -127,7 +127,7 @@ const SELF_FIELDS = ['phone', 'email', 'sharePhone', 'avail', 'prefHours', 'pref
 const MGR_FIELDS = ['role', 'roles', 'locs', 'status'];
 const OWNER_FIELDS = [...MGR_FIELDS, 'access', 'manages', 'name', 'first', 'notif'];
 const INVITEE_FIELDS = ['name', 'first', 'email', 'phone']; // fixable by a manager until the person accepts
-const SERVER_FIELDS = ['verified', 'invited', 'inviteExpires', 'invitedBy', 'invitedAt', 'id', 'userId', 'archived', 'archivedAt'];
+const SERVER_FIELDS = ['verified', 'invited', 'inviteExpires', 'invitedBy', 'invitedAt', 'id', 'userId', 'archived', 'archivedAt', 'accountDeleted'];
 
 // Returns { doc, effects } where effects are side effects the route performs after saving
 // (invites to send, identities to update).
@@ -209,6 +209,7 @@ export function applyOps(doc, actor, ops, biz) {
       if (self) deny('You can’t change your own status.');
       if (isOwner(before)) deny('The owner can’t be archived.');
       if (!['active->archived', 'invited->archived', 'archived->active'].includes(t)) deny('That status change isn’t allowed.');
+      if (t === 'archived->active' && before.accountDeleted) deny(`${before.first || 'This person'} deleted their DaySpear account. Add them again with a new invite.`);
       if (t === 'archived->active') { needRoom(biz, doc, 1); effects.restored.push(pid); }
       if (t.endsWith('archived')) effects.archived.push(pid), next.archived = 'Archived', next.archivedAt = ts;
       if (t === 'archived->active') { delete next.archived; delete next.archivedAt; }

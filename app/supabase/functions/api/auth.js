@@ -12,6 +12,14 @@ export async function getUser(req) {
   return u && u.id ? u : null;
 }
 
+// Permanently removes a sign-in account from Supabase Auth (needs the service key).
+export async function deleteAuthUser(id) {
+  const k = config.serviceKey;
+  const r = await fetch(`${config.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { apikey: k, ...(k.startsWith('eyJ') ? { Authorization: `Bearer ${k}` } : {}) } });
+  if (!r.ok && r.status !== 404) { console.error('[auth] delete user', r.status, (await r.text()).slice(0, 300)); return false; }
+  return true;
+}
+
 export async function sha256(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');

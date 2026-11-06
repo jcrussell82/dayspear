@@ -5,7 +5,7 @@
 import { config, stripeMode, emailEnabled } from './config.js';
 import { db } from './db.js';
 import { HttpError } from './errors.js';
-import { getUser, sha256, randomToken, newId, normIdent } from './auth.js';
+import { getUser, deleteAuthUser, sha256, randomToken, newId, normIdent } from './auth.js';
 import { sendEmail } from './mail.js';
 import { PLANS, PRICING } from './plans.js';
 import { actorFor, viewFor, applyOps, planState, graceChange, resetChecklists, defaultSettings, blankPerson, isMgr, isOwner } from './workspace.js';
@@ -236,6 +236,39 @@ route('POST', '/stripe/webhook', async ({ req }) => {
   const raw = await req.text();
   const event = await verifyWebhook(raw, req.headers.get('stripe-signature'));
   return { received: await handleWebhook(event) };
+});
+
+// ---- delete my account
+// Owners (with no other owner) delete the whole business: schedules, chats and everyone's access.
+// Everyone else leaves: they're archived in the team list with their contact details removed,
+// so past schedules still show their name. Then the sign-in itself is deleted from Supabase Auth.
+route('POST', '/account/delete', async ({ req }) => {
+  const user = await requireUser(req);
+  const b = await body(req);
+  if (String(b.confirm || '').trim().toLowerCase() !== 'delete') throw new HttpError(400, 'Type DELETE to confirm.');
+  const plan = [];
+  for (const m of await memberships(user.id)) {
+    const ws = await loadWorkspace(m.business_id); const p = ws.doc.people[m.person_id];
+    const otherOwner = Object.values(ws.doc.people).some(x => x.id !== m.person_id && x.access === 'owner' && x.status === 'active');
+    const biz = await business(m.business_id);
+    const wholeBiz = isOwner(p) && !otherOwner;
+    if (wholeBiz && biz.stripe_subscription_id && ['active', 'trialing', 'past_due'].includes(biz.subscription_status))
+      throw new HttpError(409, `${biz.name} still has a paid plan. Cancel it first in Settings › Plan › Manage billing, then delete your account.`, { code: 'paid_plan' });
+    plan.push({ m, wholeBiz });
+  }
+  const deleted = [];
+  for (const { m, wholeBiz } of plan) {
+    if (wholeBiz) { await db.remove('businesses', `id=${db.eq(m.business_id)}`); deleted.push(m.business_id); continue; }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ws = await loadWorkspace(m.business_id); const p = ws.doc.people[m.person_id];
+      if (p) Object.assign(p, { status: 'archived', email: '', phone: '', photo: '', birthday: null, bdayOptIn: false, sharePhone: false, verified: { email: false, phone: false }, accountDeleted: now() });
+      try { await saveWorkspace(m.business_id, ws.doc, ws.version); break; } catch (e) { if (e.status !== 409 || attempt === 2) throw e; }
+    }
+    await db.update('invites', `business_id=${db.eq(m.business_id)}&person_id=${db.eq(m.person_id)}&used_at=is.null`, { revoked: true });
+    await db.remove('memberships', `business_id=${db.eq(m.business_id)}&person_id=${db.eq(m.person_id)}`);
+  }
+  if (!(await deleteAuthUser(user.id))) throw new HttpError(502, 'Your team data was removed, but we couldn’t delete the sign-in itself. Please contact us.');
+  return { ok: true, businessesDeleted: deleted.length };
 });
 
 // ---- contact form (homepage) → CONTACT_EMAIL
