@@ -158,6 +158,31 @@ button.stat-card:hover{border-color:var(--line-strong)}
 .composer input:focus{outline:none;border-color:var(--blue);background:var(--surface)}
 .shift-ctx{margin:0 20px;margin-top:14px;padding:10px 14px;border-radius:12px;background:var(--t-sky);font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .msg-layout>*,.thread-head>*,.thread-body>*{min-width:0}
+.msg-back{display:none}
+/* Phones: show the conversation list OR one conversation, like a phone messaging app */
+@media (max-width:860px){
+  .msg-layout{min-height:0}
+  .msg-layout .ch-list{max-height:none;border-bottom:0}
+  .msg-layout.msg-open .ch-list{display:none}
+  .msg-layout:not(.msg-open) .thread{display:none}
+  .msg-layout.msg-open .thread{min-height:calc(100vh - 220px)}
+  .msg-back{display:grid;flex:none;margin-left:-6px}
+  .thread-head{padding:12px 14px}
+  .thread-body{padding:14px}
+}
+/* Phones: a slim name column so the days get the room */
+@media (max-width:860px){
+  .sgrid{grid-template-columns:92px repeat(7,minmax(112px,1fr));min-width:876px}
+  .sg-corner{padding:10px 8px}
+  .sg-person{padding:8px;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px}
+  .sg-name{flex-direction:column;align-items:flex-start;gap:4px}
+  .sg-person small{display:none}
+  .sg-person b{font-size:12.5px;line-height:1.2;white-space:normal;word-break:break-word}
+  .sg-person .avatar{width:28px;height:28px;font-size:11px}
+  .sg-person .hours{font-size:11px;margin:0}
+}
+/* keep the location name in view while the week scrolls sideways */
+.sg-group>span:first-child{position:sticky;left:14px}
 .composer input:not([type=checkbox]){min-width:0}
 @media (max-width:860px){.composer{flex-wrap:wrap}.composer input:not([type=checkbox]){flex:1 1 100%;order:-1}.composer .ann-to{flex:1;min-width:0}}
 @media (max-width:860px){.msg-layout{grid-template-columns:minmax(0,1fr);height:auto}.ch-list{border-right:0;border-bottom:1px solid var(--line);max-height:220px}.thread{min-height:420px}}

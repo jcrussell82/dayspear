@@ -45,7 +45,9 @@ function renderMessages(){
     <div class="thread-body" id="tbody">${msgs.map(m=>msgHTML(m,ME_MGR)).join('')||'<div class="empty">No messages yet. Say hi 👋</div>'}</div>
     <form class="composer" id="msgForm"><input id="msgText" placeholder="Message ${esc(chLabel(UI.channel))}…" aria-label="Message" autocomplete="off"><button class="btn btn-primary btn-sm" type="submit">${icon('send',14)} Send</button></form>`;
   }
-  $('#v-messages').innerHTML=`<div class="msg-layout"><nav class="ch-list" aria-label="Conversations">${list}</nav><div class="thread">${body}</div></div>`;
+  if(UI._lastCh!==undefined&&UI._lastCh!==UI.channel) UI.msgOpen=true; UI._lastCh=UI.channel;
+  body=body.replace('<div class="thread-head">',`<div class="thread-head"><button type="button" class="icon-btn msg-back" data-msgback aria-label="Back to conversations">${icon('left',16)}</button>`);
+  $('#v-messages').innerHTML=`<div class="msg-layout ${UI.msgOpen?'msg-open':''}"><nav class="ch-list" aria-label="Conversations">${list}</nav><div class="thread">${body}</div></div>`;
   const tb=$('#tbody'); if(tb) tb.scrollTop=tb.scrollHeight;
 }
 const annAudience=a=>activeIds().filter(i=>!a.loc||PEOPLE[i].locs.includes(a.loc));

@@ -59,8 +59,9 @@ document.addEventListener('click',e=>{
   if(ds.approveoffer){ const s=shiftById(ds.approveoffer); assignCover(s.id, s.cover.offerBy); return; }
   if(ds.declineoffer){ const s=shiftById(ds.declineoffer); const by=s.cover.offerBy; s.cover.status='needed'; delete s.cover.offerBy; commit(); toast(`Declined ${esc(firstOf(by))}’s offer · shift still needs coverage`); return; }
   if(ds.cancelcover){ const s=shiftById(ds.cancelcover); delete s.cover; commit(); toast(`Coverage request cancelled · ${esc(firstOf(s.emp))} keeps the shift`); return; }
-  if(ds.thread){ UI.channel='sh-'+ds.thread; go('messages'); return; }
-  if(ds.ch){ UI.channel=ds.ch; render(); return; }
+  if(ds.thread){ UI.channel='sh-'+ds.thread; UI.msgOpen=true; go('messages'); return; }
+  if(ds.ch){ UI.channel=ds.ch; UI.msgOpen=true; render(); return; }
+  if(ds.msgback!==undefined){ UI.msgOpen=false; render(); $('#v-messages').scrollTop=0; return; }
   if(ds.editshift){ openShiftModal(ds.editshift); return; }
   if(ds.cl){ UI.openCl[ds.cl]=!UI.openCl[ds.cl]; render(); return; }
   if(ds.tv){ UI.taskView=ds.tv; render(); return; }

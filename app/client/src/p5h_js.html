@@ -2,7 +2,8 @@
 /* ======================= APPEARANCE ======================= */
 const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : {matches:false};
 const isDark = pref => pref==='dark' || (pref==='system' && darkMQ.matches);
-function applyTheme(){ const d=isDark(PEOPLE[ME_MGR].theme); $('#app').classList.toggle('dark',d); $('#scrim').classList.toggle('dark',d); }
+function applyTheme(){ const who=(UI.view==='employee'&&PEOPLE[ME])?ME:ME_MGR; const d=isDark((PEOPLE[who]||{}).theme); // the employee screen follows that employee’s own choice
+  $('#app').classList.toggle('dark',d); $('#scrim').classList.toggle('dark',d); }
 if(darkMQ.addEventListener) darkMQ.addEventListener('change',()=>render());
 
 /* ======================= PROFILES ======================= */

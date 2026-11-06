@@ -63,7 +63,7 @@ function renderSchedule(){
     h+=`<div class="sg-head ${isToday(w,d)?'today':''}"><b>${DAYS[d]} ${fmtNum(w,d)}</b><span class="hrs">${fmtH(dh)}${p?` · <span style="color:var(--amber-ink);font-weight:600">${p} time-off req.</span>`:''}</span></div>`;
   }
   // Open shifts row
-  h+=`<div class="sg-group">Open shifts</div><div class="sg-open" style="display:contents">`;
+  h+=`<div class="sg-group"><span>Open shifts</span></div><div class="sg-open" style="display:contents">`;
   h+=`<div class="sg-person">${avatar(null)}<div><b>Unassigned</b><small>Anyone eligible can pick up</small></div></div>`;
   for(let d=0;d<7;d++) h+=cell(null,w,d,ws);
   h+=`</div>`;
@@ -127,7 +127,7 @@ function openShiftModal(id, preset={}){
     <button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button>
     <button type="submit" class="btn btn-primary btn-sm" id="saveShift">${ex?'Save changes':'Add shift'}</button>`}
   </div></form>`, m=>{
-    if(ro){ $$('select,input',m).forEach(el=>el.disabled=true); $('#f-warn',m).insertAdjacentHTML('beforebegin',`<div class="alert amber">ℹ<div>${esc(LOCS[ex.loc].name)} is managed by ${esc(mgrNames([ex.loc]))}. You can view this shift, but only they can change it.</div></div>`); $('#modalTitle',m).textContent='Shift details'; $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; go('messages'); }; return; }
+    if(ro){ $$('select,input',m).forEach(el=>el.disabled=true); $('#f-warn',m).insertAdjacentHTML('beforebegin',`<div class="alert amber">ℹ<div>${esc(LOCS[ex.loc].name)} is managed by ${esc(mgrNames([ex.loc]))}. You can view this shift, but only they can change it.</div></div>`); $('#modalTitle',m).textContent='Shift details'; $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; UI.msgOpen=true; go('messages'); }; return; }
     const inviting=()=>$('#f-emp',m).value==='__invite';
     const read=()=>({...s,emp:inviting()?null:($('#f-emp',m).value||null),d:+$('#f-day',m).value,loc:$('#f-loc',m).value,s:$('#f-s',m).value,e:$('#f-e',m).value,role:$('#f-role',m).value,ck:$('#f-ck',m).value||null});
     const warn=()=>{
@@ -163,7 +163,7 @@ function openShiftModal(id, preset={}){
       $('#delShift',m).onclick=()=>{ const i=D.shifts.indexOf(ex); D.shifts.splice(i,1); if(!ex.draft) D.deleted[delKey(ex.w,ex.loc)]=(D.deleted[delKey(ex.w,ex.loc)]||0)+1; closeModal(); commit();
         toast('Shift deleted',()=>{ D.shifts.splice(i,0,ex); if(!ex.draft) D.deleted[delKey(ex.w,ex.loc)]--; commit(); }); };
       const pc=$('#postCover',m); if(pc) pc.onclick=()=>{ ex.cover={status:'needed',from:ex.emp,note:'Posted by manager'}; closeModal(); commit(); toast(`Posted for coverage — eligible teammates will be notified`); };
-      $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; go('messages'); };
+      $('#shiftChat',m).onclick=()=>{ closeModal(); UI.channel='sh-'+ex.id; UI.msgOpen=true; go('messages'); };
     }
   });
 }
