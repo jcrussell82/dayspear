@@ -178,6 +178,49 @@ test('phone numbers stay private unless the business allows sharing AND the empl
   assert.equal(s.doc.people[erinId].phone, undefined, 'hidden once the employee opts out');
 });
 
+test('two-way trades: ask, decline, accept, manager approves; auto-approve swaps at once', { skip }, async () => {
+  ws = await owner.api('GET', '/workspace');
+  const P = Object.values(ws.doc.people), erin = P.find(p => p.name === 'Erin E.').id, sam = P.find(p => p.name === 'Sam Second').id;
+  const loc = Object.keys(ws.doc.locs)[0], role = Object.keys(ws.doc.roles)[0], wk = '2030-02-04';
+  const sh = (id, d, emp) => ({ c: 'shifts', id, v: { wk, d, emp, s: '09:00', e: '17:00', role, loc, draft: false } });
+  let r = await owner.api('POST', '/workspace/ops', { ops: [sh('tA', 1, erin), sh('tB', 3, sam), sh('tC', 2, erin), sh('tD', 4, sam), sh('tDraft', 5, sam), { c: 'published', id: wk, v: { [loc]: { by: 'x' } } }] });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  await owner.api('POST', '/workspace/ops', { ops: [{ ...sh('tDraft', 5, sam), v: { ...sh('tDraft', 5, sam).v, draft: true, pub: { emp: sam, d: 5, s: '09:00', e: '17:00', role, loc } } }] });
+  const ask = (id, trade) => emp.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id, v: { cover: { status: 'needed', from: erin, trade, note: 'Swap?' } } }] });
+  assert.equal((await ask('tA', 'tDraft')).status, 409, 'a shift being edited can’t be traded');
+  assert.equal((await ask('tA', 'tC')).status, 409, 'can’t trade with yourself');
+  r = await ask('tA', 'tB'); assert.equal(r.status, 200, JSON.stringify(r));
+  let c = r.doc.shifts.find(s => s.id === 'tA').cover;
+  assert.equal(c.target, sam, 'the teammate is taken from their shift, not the request'); assert.equal(c.trade, 'tB');
+  // Sam can't turn a trade into a one-way pickup; declining clears it
+  r = await emp2.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tA', v: { cover: { status: 'offered', offerBy: erin } } }] });
+  assert.equal(r.status, 403);
+  r = await emp2.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tA', v: {} }] });
+  assert.equal(r.status, 200); assert.equal(r.doc.shifts.find(s => s.id === 'tA').cover, undefined);
+  // ask again, Sam accepts, owner approves the swap
+  await ask('tA', 'tB');
+  r = await emp2.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tA', v: { cover: { status: 'offered', offerBy: sam } } }] });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  c = (await owner.api('GET', '/workspace')).doc.shifts.find(s => s.id === 'tA').cover;
+  assert.equal(c.status, 'offered'); assert.equal(c.offerBy, sam); assert.equal(c.trade, 'tB');
+  r = await owner.api('POST', '/workspace/ops', { ops: [sh('tA', 1, sam), sh('tB', 3, erin), { c: 'coverLog', id: 'cl1', v: { id: 'cl1', shiftId: 'tA', from: erin, to: sam, trade: 'tB' } }] });
+  assert.equal(r.status, 200);
+  assert.equal(r.doc.shifts.find(s => s.id === 'tA').emp, sam); assert.equal(r.doc.shifts.find(s => s.id === 'tB').emp, erin);
+  // with auto-approve on, accepting swaps both shifts straight away (Erin now has tB, Sam has tD)
+  const settings = r.doc.settings; settings.requests.autoApprove = true;
+  assert.equal((await owner.api('POST', '/workspace/ops', { ops: [{ c: 'settings', v: settings }] })).status, 200);
+  assert.equal((await ask('tB', 'tD')).status, 200);
+  r = await emp2.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tB', v: { cover: { status: 'offered', offerBy: sam } } }] });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.equal(r.doc.shifts.find(s => s.id === 'tB').emp, sam); assert.equal(r.doc.shifts.find(s => s.id === 'tD').emp, erin);
+  assert.equal(r.doc.shifts.find(s => s.id === 'tB').cover, undefined);
+  settings.requests.autoApprove = false; await owner.api('POST', '/workspace/ops', { ops: [{ c: 'settings', v: settings }] });
+  // Erin can withdraw her own request
+  await emp.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tC', v: { cover: { status: 'needed', from: erin, note: '' } } }] });
+  r = await emp.api('POST', '/workspace/ops', { ops: [{ c: 'shifts', id: 'tC', v: {} }] });
+  assert.equal(r.status, 200); assert.equal(r.doc.shifts.find(s => s.id === 'tC').cover, undefined);
+});
+
 test('changing your sign-in email: the new one works only after its code is confirmed', { skip }, async () => {
   const newEmail = em('erin-new');
   const v = await emp.api('GET', '/workspace');
