@@ -11,6 +11,9 @@ function tradesForMe(){ return D.shifts.filter(s=>s.cover&&s.cover.trade&&s.cove
 function tradeOptions(x){ return D.shifts.filter(y=>y.id!==x.id&&!y.draft&&!y.cover&&y.emp&&y.emp!==ME&&PEOPLE[y.emp]&&PEOPLE[y.emp].status==='active'&&!isPast(y.w,y.d)
   &&PEOPLE[ME].locs.includes(y.loc)&&(PEOPLE[y.emp].locs||[]).includes(x.loc)&&!D.shifts.some(z=>z.cover&&z.cover.trade===y.id)
   &&!conflictsFor({...y,emp:ME},x.id).length&&!conflictsFor({...x,emp:y.emp},y.id).length).sort((a,b)=>a.w-b.w||a.d-b.d||toMin(a.s)-toMin(b.s)); }
+// my upcoming shifts I could give in exchange for teammate shift y
+const myTradesFor = y=>D.settings.requests.namedSwaps===false?[]:D.shifts.filter(x=>x.emp===ME&&!x.draft&&!x.cover&&!isPast(x.w,x.d)).filter(x=>tradeOptions(x).some(o=>o.id===y.id));
+const canTradeFor = y=>y.emp&&y.emp!==ME&&!y.cover&&!y.draft&&!isPast(y.w,y.d)&&myTradesFor(y).length>0;
 function pickups(){ return needsCover().filter(s=>s.emp!==ME&&s.cover.status==='needed'&&!s.cover.trade&&!s.draft&&PEOPLE[ME].locs.includes(s.loc)&&(!s.cover.target||s.cover.target===ME)&&!conflictsFor({...s,emp:ME},s.id).length); }
 function myTodos(){ const mine=new Set(D.shifts.filter(s=>s.emp===ME).map(s=>s.id)); return D.tasks.filter(t=>t.status!=='done'&&((t.assign.type==='person'&&t.assign.ref===ME)||(t.assign.type==='shift'&&mine.has(t.assign.ref))||(t.assign.type==='location'&&PEOPLE[ME].locs.includes(t.assign.ref)))); }
 function renderEmployee(){
@@ -54,12 +57,12 @@ function renderEmployee(){
         const ppl=new Set(all.filter(s=>s.emp).map(s=>s.emp)).size;
         body+=`<div class="p-card"><h4>${weekRel(w)} · ${weekLabel(w)} <span class="muted" style="font-weight:500;font-size:12px">${ppl} ${ppl===1?'person':'people'}</span></h4>`;
         for(let d=0;d<7;d++){ const ss=all.filter(s=>s.d===d); if(!ss.length) continue; const past=isPast(w,d);
-          body+=`<div class="p-day" style="${past?'opacity:.5':''}"><div class="p-dayh">${DAYS[d]} ${fmtNum(w,d)}${isToday(w,d)?' · Today':''}</div>${ss.map(s=>`<div class="p-team${s.emp===ME?' me':''}">${s.emp?avatar(s.emp,'sm'):'<span class="p-open">?</span>'}<span class="nm"><b>${s.emp===ME?'You':s.emp?esc(nameOf(s.emp)):'Open shift'}</b><small>${ROLES[s.role]}${locs.length>1?' · '+esc(LOCS[s.loc].name):''}${s.cover&&s.emp&&s.emp!==ME?' · needs cover':''}</small></span><span class="tm">${span(s)}</span>${pkIds.has(s.id)&&!past?`<button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button>`:''}</div>`).join('')}</div>`;
+          body+=`<div class="p-day" style="${past?'opacity:.5':''}"><div class="p-dayh">${DAYS[d]} ${fmtNum(w,d)}${isToday(w,d)?' · Today':''}</div>${ss.map(s=>`<div class="p-team${s.emp===ME?' me':''}">${s.emp?avatar(s.emp,'sm'):'<span class="p-open">?</span>'}<span class="nm"><b>${s.emp===ME?'You':s.emp?esc(nameOf(s.emp)):'Open shift'}</b><small>${ROLES[s.role]}${locs.length>1?' · '+esc(LOCS[s.loc].name):''}${s.cover&&s.emp&&s.emp!==ME?' · needs cover':''}</small></span><span class="tm">${span(s)}</span>${pkIds.has(s.id)&&!past?`<button class="btn btn-green btn-xs" data-eoffer="${s.id}">I can take it</button>`:canTradeFor(s)?`<button class="btn btn-ghost btn-xs" data-esheet="tradefor|${s.id}">Trade</button>`:''}</div>`).join('')}</div>`;
         }
         if(!all.length) body+=`<p class="muted" style="font-size:13px">Not published yet.</p>`;
         body+=`</div>`;
       }
-      body+=`<p class="muted p-wide" style="font-size:12px">Shows published shifts at ${esc(locNames(locs))}. Can’t make one of yours? Use <b>Can’t make it</b> under Mine to ask everyone or one teammate.</p>`;
+      body+=`<p class="muted p-wide" style="font-size:12px">Shows published shifts at ${esc(locNames(locs))}. Tap <b>Trade</b> on a teammate’s shift to offer one of yours for it, or use <b>Can’t make it</b> under Mine.</p>`;
     }
   }
   if(tab==='shifts'){
@@ -176,6 +179,19 @@ function openSheet(kind, arg){
       s.cover={status:'needed',from:ME,note:$('#cant-why').value.trim()}; if(target) s.cover.target=target;
       const k='sh-'+s.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:(target?`@${firstOf(target)} could you take this one?`:'I can’t make this one. Can anyone cover?')+(s.cover.note?' — '+s.cover.note:''),when:nowStamp()});
       closeSheet(); commit(); toast(target?`Asked ${esc(firstOf(target))} · ${esc(mgrNames([s.loc]))} can see it in Requests`:`Posted · eligible teammates and ${esc(mgrNames([s.loc]))} were notified`); };
+  }
+  if(kind==='tradefor'){
+    const y=shiftById(arg); const mine=myTradesFor(y); const R=D.settings.requests; const b=y.emp;
+    p.innerHTML=`<div class="grab"></div><h3>Trade with ${esc(firstOf(b))}?</h3><p class="muted" style="font-size:13.5px">You’d take ${esc(firstOf(b))}’s ${fmtDay(y.w,y.d)} · ${span(y)} · ${ROLES[y.role]}</p>
+      <form id="tfForm" style="display:grid;gap:12px">
+      <div class="field"><label for="tf-mine">${esc(firstOf(b))} would take your</label><select id="tf-mine">${mine.map(x=>`<option value="${x.id}">${DAYS[x.d]} ${fmtNum(x.w,x.d)} · ${span(x)} · ${ROLES[x.role]}${x.loc!==y.loc?' · '+esc(LOCS[x.loc].name):''}</option>`).join('')}</select><span class="muted" style="font-size:12px">Only your shifts that fit both schedules are listed.</span></div>
+      <div class="field"><label for="tf-why">Note <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="tf-why" rows="2" placeholder="e.g. I have an appointment that morning"></textarea></div>
+      <div class="alert amber">Nothing changes until ${esc(firstOf(b))} accepts${R.autoApprove?'':' and '+esc(mgrNames([y.loc]))+' approves'}.</div>
+      <button class="btn btn-primary" type="submit">Ask to trade</button><button class="btn btn-ghost" type="button" data-eclose>Cancel</button></form>`;
+    $('#tfForm').onsubmit=ev=>{ ev.preventDefault(); const x=shiftById($('#tf-mine').value); if(!x) return;
+      x.cover={status:'needed',from:ME,note:$('#tf-why').value.trim(),target:b,trade:y.id};
+      const k='sh-'+x.id; (D.messages[k]=D.messages[k]||[]).push({from:ME,text:`@${firstOf(b)} want to trade? I’d take your ${DAYS[y.d]} ${span(y)}.`+(x.cover.note?' — '+x.cover.note:''),when:nowStamp()});
+      closeSheet(); commit(); toast(`Trade request sent to ${esc(firstOf(b))}`); };
   }
   sh.classList.add('open'); const f=p.querySelector('select,textarea'); f&&f.focus();
 }
