@@ -257,11 +257,38 @@ export function applyOps(doc, actor, ops, biz) {
     if (!before || v === null || (before.draft && !before.pub)) deny();
     const visibleEmp = before.draft ? before.pub.emp : before.emp;
     if (!(me.locs || []).includes(before.loc)) deny();
+    const pubEmp = x => (x.draft ? x.pub && x.pub.emp : x.emp);
+    // ---- two-way trades: A offers their shift X for teammate B's shift Y
+    if (v.cover && v.cover.trade && v.cover.from === actor.id && visibleEmp === actor.id && !before.cover) {   // A asks
+      if (settings.requests?.namedSwaps === false) deny('Your team doesn’t allow asking a specific teammate.');
+      const y = byId(doc.shifts, v.cover.trade), b = y && pubEmp(y), bp = b && doc.people[b];
+      if (!y || y.id === sid || y.draft || before.draft || !b || b === actor.id || bp.status !== 'active' || y.cover) throw new HttpError(409, 'That shift can’t be traded right now.');
+      if (!(me.locs || []).includes(y.loc) || !(bp.locs || []).includes(before.loc)) deny('You can only trade with someone who works at both locations.');
+      before.cover = { status: 'needed', from: actor.id, note: str(v.cover.note, 300), target: b, trade: y.id };
+      return;
+    }
+    if (before.cover && before.cover.trade) {
+      const c = before.cover;
+      if (c.from === actor.id && visibleEmp === actor.id && !v.cover) { delete before.cover; return; }       // A cancels
+      if (c.target !== actor.id || c.status !== 'needed') deny('That shift change isn’t allowed.');
+      if (!v.cover) { delete before.cover; return; }                                                        // B declines
+      if (v.cover.status !== 'offered' || v.cover.offerBy !== actor.id) deny('That shift change isn’t allowed.');
+      const y = byId(doc.shifts, c.trade);
+      if (!y || y.draft || before.draft || y.emp !== actor.id || y.cover || before.emp !== c.from) { throw new HttpError(409, 'That trade is no longer possible — one of the shifts changed.'); }
+      if (settings.requests?.autoApprove) {                                                                 // B accepts, auto-approved
+        const id = 'c' + Date.now().toString(36);
+        doc.coverLog.push({ id: id + 'a', shiftId: sid, from: c.from, to: actor.id, at: ts, by: 'auto', trade: y.id });
+        doc.coverLog.push({ id: id + 'b', shiftId: y.id, from: actor.id, to: c.from, at: ts, by: 'auto', trade: sid });
+        before.emp = actor.id; y.emp = c.from; delete before.cover; return;
+      }
+      before.cover = { ...c, status: 'offered', offerBy: actor.id }; return;                               // B accepts → manager approves
+    }
     if (v.cover && v.cover.from === actor.id && visibleEmp === actor.id && !before.cover) {           // ask for coverage
       const target = v.cover.target && doc.people[v.cover.target]?.status === 'active' && settings.requests?.namedSwaps !== false ? v.cover.target : undefined;
       before.cover = { status: 'needed', from: actor.id, note: str(v.cover.note, 300), ...(target ? { target } : {}) };
       return;
     }
+    if (before.cover && before.cover.from === actor.id && visibleEmp === actor.id && before.cover.status === 'needed' && !v.cover) { delete before.cover; return; } // cancel my request
     if (before.cover && before.cover.status === 'needed' && visibleEmp !== actor.id && (!before.cover.target || before.cover.target === actor.id)) {
       if (settings.requests?.autoApprove && v.emp === actor.id) {                                     // pick up, auto-approved
         doc.coverLog.push({ id: 'c' + Date.now().toString(36), shiftId: sid, from: before.cover.from || before.emp || null, to: actor.id, at: ts, by: 'auto' });
@@ -275,7 +302,7 @@ export function applyOps(doc, actor, ops, biz) {
     const s = { id: sid, wk: str(v.wk, 10), d: Math.min(6, Math.max(0, Number(v.d) || 0)), emp: v.emp && doc.people[v.emp] ? v.emp : null,
       s: str(v.s, 5), e: str(v.e, 5), role: doc.roles[v.role] ? v.role : Object.keys(doc.roles)[0], loc: v.loc, ck: v.ck || null, draft: Boolean(v.draft) };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.wk) || !/^\d\d:\d\d$/.test(s.s) || !/^\d\d:\d\d$/.test(s.e)) throw new HttpError(400, 'Invalid shift.');
-    if (v.cover) s.cover = { status: v.cover.status === 'offered' ? 'offered' : 'needed', from: v.cover.from || null, note: str(v.cover.note, 300), ...(v.cover.offerBy ? { offerBy: v.cover.offerBy } : {}), ...(v.cover.target ? { target: v.cover.target } : {}) };
+    if (v.cover) s.cover = { status: v.cover.status === 'offered' ? 'offered' : 'needed', from: v.cover.from || null, note: str(v.cover.note, 300), ...(v.cover.offerBy ? { offerBy: v.cover.offerBy } : {}), ...(v.cover.target ? { target: v.cover.target } : {}), ...(v.cover.trade ? { trade: str(v.cover.trade, 40) } : {}) };
     if (v.pub) s.pub = { emp: v.pub.emp && doc.people[v.pub.emp] ? v.pub.emp : null, d: Math.min(6, Math.max(0, Number(v.pub.d) || 0)), s: str(v.pub.s, 5), e: str(v.pub.e, 5), role: str(v.pub.role, 40), loc: str(v.pub.loc, 40) };
     if (v.draftBy) s.draftBy = v.draftBy;
     return s;
@@ -304,7 +331,7 @@ export function applyOps(doc, actor, ops, biz) {
     if (!v || !v.shiftId) return;
     const s = byId(doc.shifts, v.shiftId);
     if (!s || !manages(me, s.loc)) deny();
-    if (!byId(doc.coverLog, v.id)) doc.coverLog.push({ id: str(v.id, 40), shiftId: v.shiftId, from: v.from || null, to: v.to, at: ts, by: actor.id });
+    if (!byId(doc.coverLog, v.id)) doc.coverLog.push({ id: str(v.id, 40), shiftId: v.shiftId, from: v.from || null, to: v.to, at: ts, by: actor.id, ...(v.trade ? { trade: str(v.trade, 40) } : {}) });
   }
 
   // ---------------- checklists
