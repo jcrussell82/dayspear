@@ -71,7 +71,7 @@ function renderEmployee(){
         <div style="display:flex;flex-direction:column;gap:12px">${D.messages[key].map(m=>msgHTML(m,ME)).join('')||'<p class="muted">No messages yet.</p>'}</div>`;
     }
   }
-  if(tab==='profile'){ title='Profile'; body+=profileForm(ME,'self')+`<button type="button" class="btn btn-ghost" id="signOut2" style="margin-top:4px">${icon('logout',15)} Sign out</button>`; }
+  if(tab==='profile'){ title='Profile'; body+=profileForm(ME,'self')+`<button type="button" class="btn btn-ghost" id="signOut2" style="margin-top:4px">${icon('logout',15)} Sign out</button>${REAL?'<button type="button" class="btn btn-danger" id="deleteAcct">Delete account</button>':''}`; }
   const showComposer = tab==='chat'&&UI.emp.thread&&UI.emp.thread!=='ann';
   const tabs=[['home','home','Home'],['schedule','cal','Schedule'],['shifts','swap','Shifts'],['chat','chat','Chat'],['profile','user','Profile']];
   $('#v-employee').innerHTML=`<div class="emp-stage">

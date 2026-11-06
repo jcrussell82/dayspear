@@ -303,8 +303,9 @@ button{cursor:pointer}
 @media (max-width:860px){.contact-grid{grid-template-columns:1fr}}
 .contact-card{background:#fff;border:1px solid var(--line);border-radius:24px;padding:28px;display:grid;gap:16px;box-shadow:var(--shadow)}
 .form-err{color:#b23b37;font-size:14px;font-weight:500}
-.sent-card{text-align:center;padding:48px 28px}
-.sent-card .ico{width:56px;height:56px;border-radius:50%;background:var(--mist);color:var(--green-ink);display:grid;place-items:center;margin:0 auto 16px;font-size:26px}
+.contact-card.sent-card{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 28px;gap:0}
+.sent-card h3{margin:0 0 6px!important;line-height:1.25}.sent-card p{margin:0;max-width:34ch}
+.sent-card .ico{width:56px;height:56px;border-radius:50%;background:var(--mist);color:var(--green-ink);display:grid;place-items:center;margin:0 0 14px;font-size:26px;flex:none}
 
 /* ---------- Scrollbars: thin, green thumb, no track, no arrows ---------- */
 :root{--sb-thumb:rgba(94,204,91,.6);--sb-thumb-hover:#5ecc5b}

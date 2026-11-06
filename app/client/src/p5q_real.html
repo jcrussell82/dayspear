@@ -219,6 +219,7 @@ function realGuard(){
   if(!LOADED){ loadWorkspace().then(route).catch(e=>{ toast(esc(e.message)); if(e.status===401||e.status===403){ SESSION=null; location.replace('#login'); } }); return false; }
   const parts=h.slice(1).split('?')[0].split('/'); const v=parts[1];
   if(!isMgr(ME)&&v!=='employee'){ location.replace('#app/employee'); return false; }
+  if(isMgr(ME)&&v==='employee'){ location.replace('#app/schedule'); return false; } // the employee preview is a demo feature
   if(v==='settings'&&parts[2]){ UI.set=parts[2]; }
   if(h.includes('checkout=success')){ history.replaceState(null,'','#app/settings/plan'); setTimeout(()=>toast('Thanks! Your plan updates as soon as Stripe confirms the payment — usually a few seconds.'),300); refreshBillingSoon(); }
   if(h.includes('checkout=cancelled')){ history.replaceState(null,'','#app/settings/plan'); setTimeout(()=>toast('Checkout cancelled — nothing was charged.'),300); }
@@ -427,6 +428,8 @@ function addStyle(css){ const s=document.createElement('style'); s.textContent=c
 function realChrome(){
   document.body.classList.add('real');
   addStyle(`body.real.is-emp #app .sidebar, body.real.is-emp #app .mob-nav, body.real.is-emp #app #topbar{display:none!important}`);
+  // the employee preview is a demo feature: real managers don't get it
+  addStyle(`body.real #app .mob-nav button[data-go="employee"]{display:none!important} @media (max-width:900px){ body.real #app .mob-nav{grid-template-columns:repeat(5,1fr)} }`);
   // the preview links on the homepage open the demo (sample data) instead of a real account
   $$('a[href^="#app/"]').forEach(a=>{ if(a.closest('#app')) return; a.setAttribute('href','?demo'+a.getAttribute('href')); });
   $$('.site-foot span').forEach(s=>{ if(/prototype/i.test(s.textContent)) s.textContent='© '+new Date().getFullYear()+' DaySpear'; });
@@ -445,6 +448,25 @@ function demoChrome(){
   el.innerHTML=`<b>Demo</b><span>Sample business and people — nothing here is real or sent, and changes stay in this browser.</span>${onServer?'<a href="./#signup">Create a real account</a>':''}`;
   const main=$('#app .main'); if(main) main.insertBefore(el,$('#topbar').nextSibling);
 }
+
+/* ---------- delete my account ---------- */
+function openDeleteAccount(){
+  const owner=isOwner(PEOPLE[ME]), biz=esc(D.settings.business.name);
+  openModal(`${modalHead('Delete your account?')}<form id="delAcctForm"><div class="modal-body">
+    ${owner?`<p style="color:var(--ink-2);font-size:14px">This permanently deletes <b>${biz}</b>: its schedules, requests, checklists, chats and everyone’s access. Your team won’t be able to sign in to it again.</p>`
+      :`<p style="color:var(--ink-2);font-size:14px">This permanently deletes your DaySpear sign-in and removes you from <b>${biz}</b>. Your name stays on past schedules; your contact details are removed. To come back, you’d need a new invite.</p>`}
+    <p style="color:var(--ink-2);font-size:14px">This can’t be undone.</p>
+    <div class="field"><label for="da-confirm">Type <b>DELETE</b> to confirm</label><input id="da-confirm" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+    <p class="auth-err" id="da-err" role="alert"></p></div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button><button class="btn btn-danger btn-sm" type="submit">Delete account</button></div></form>`, m=>{
+    $('#delAcctForm',m).onsubmit=async e=>{ e.preventDefault(); const v=$('#da-confirm',m).value.trim();
+      if(v.toLowerCase()!=='delete'){ $('#da-err',m).textContent='Type DELETE to confirm.'; return; }
+      const b=$('button[type=submit]',m); b.disabled=true;
+      try{ await API('POST','/account/delete',{confirm:v}); closeModal(); store.set(null); UI.real=false; SESSION=null; LOADED=false; SYNC.base=null; D=seed(); syncRefs(); ME_MGR='mgr'; ME='e1'; document.body.classList.remove('is-emp'); location.hash='#home'; toast('Your account was deleted'); }
+      catch(err){ $('#da-err',m).textContent=err.message; b.disabled=false; } };
+  });
+}
+document.addEventListener('click',e=>{ if(REAL&&e.target.closest('#deleteAcct')) openDeleteAccount(); });
 
 async function boot(){
   const wantDemo=/[?&]demo\b/.test(location.search);
