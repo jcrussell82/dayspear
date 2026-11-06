@@ -273,3 +273,31 @@ test('CORS: only the site’s own address may call the API from a browser', { sk
   const bad = await fetch(URL_ + '/functions/v1/api/config', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } });
   assert.equal(bad.headers.get('access-control-allow-origin'), null);
 });
+
+test('deleting an account: employees leave the team, their sign-in is removed', { skip }, async () => {
+  assert.equal((await emp.api('POST', '/account/delete', { confirm: 'nope' })).status, 400);
+  const erinId = (await emp.api('GET', '/workspace')).doc.me;
+  assert.equal((await emp.api('POST', '/account/delete', { confirm: 'DELETE' })).status, 200);
+  assert.equal((await emp.api('GET', '/workspace')).status, 401, 'the old session no longer works');
+  assert.notEqual((await other.otp(em('erin'), false)).status, 200, 'the sign-in is gone');
+  const v = await owner.api('GET', '/workspace'); const erin = v.doc.people[erinId];
+  assert.equal(erin.status, 'archived'); assert.equal(erin.email, ''); assert.ok(erin.accountDeleted);
+  assert.equal((await owner.api('POST', '/workspace/ops', { ops: [{ c: 'people', id: erinId, v: { status: 'active' } }] })).status, 403, 'can’t be restored without a new invite');
+});
+
+test('deleting an account: an owner with a paid plan must cancel it first', { skip }, async () => {
+  const r = await owner.api('POST', '/account/delete', { confirm: 'DELETE' });
+  assert.equal(r.status, 409); assert.equal(r.code, 'paid_plan');
+  assert.equal((await owner.api('GET', '/workspace')).status, 200, 'nothing was deleted');
+});
+
+test('deleting an account: an owner on the Free plan deletes the whole business', { skip }, async () => {
+  const o3 = person(), e3 = person();
+  const s = await signup(o3, em('owner3'), 'Gone Soon', [{ name: 'Gail Gone', contact: em('gail') }]);
+  await acceptInvite(e3, s.shareLinks[0].link, em('gail'), 'Gail');
+  const bizId = (await o3.api('GET', '/session')).businesses[0].businessId;
+  assert.equal((await o3.api('POST', '/account/delete', { confirm: 'delete' })).status, 200);
+  assert.equal((await e3.api('GET', '/workspace')).status, 403, 'the team loses access');
+  const rows = await (await fetch(`${URL_}/rest/v1/businesses?id=eq.${bizId}&select=id`, { headers: { apikey: SERVICE, Authorization: 'Bearer ' + SERVICE } })).json();
+  assert.deepEqual(rows, [], 'the business and its data are gone');
+});
