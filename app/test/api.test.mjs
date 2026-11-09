@@ -338,6 +338,32 @@ test('archived people lose access', { skip }, async () => {
   assert.equal((await emp2.api('GET', '/workspace')).status, 403);
 });
 
+test('admin dashboard: only ADMIN_EMAILS can see it, and it shows counts and revenue', { skip }, async () => {
+  assert.equal((await owner.api('GET', '/admin/stats')).status, 404, 'a regular owner gets "not found"');
+  assert.equal((await other.api('GET', '/admin/stats')).status, 401);
+  const admin = person(); await admin.signIn('admin@dayspear.test', true);
+  assert.equal((await admin.api('GET', '/session')).admin, true);
+  const s = await admin.api('GET', '/admin/stats');
+  assert.equal(s.status, 200, JSON.stringify(s));
+  assert.ok(s.businesses >= 2); assert.ok(s.people.active >= 1);
+  assert.ok(Array.isArray(s.list) && s.list.find(b => b.name === 'Test Café'), 'businesses are listed');
+  const cafe = s.list.find(b => b.name === 'Test Café');
+  assert.ok(cafe.owner_email && cafe.active_people >= 1 && cafe.locations === 2);
+  assert.equal(JSON.stringify(s).includes('Erin'), false, 'no team member names');
+  assert.equal(s.weekly_signups.length, 12);
+  assert.equal(typeof s.mrr, 'number');
+});
+
+test('Stripe webhooks: a cancelled-at-period-end subscription shows when it ends', { skip }, async () => {
+  const bizId = (await owner.api('GET', '/session')).businesses[0].businessId;
+  const raw = JSON.stringify({ id: 'evt_c1' + run, type: 'customer.subscription.updated', data: { object: { id: 'sub_c_' + run, customer: 'cus_c_' + run, status: 'active', cancel_at_period_end: true, metadata: { business_id: bizId }, items: { data: [{ current_period_end: 1900000000, price: { id: 'price_team_test' } }] } } } });
+  const t = Math.floor(Date.now() / 1000), sig = crypto.createHmac('sha256', WHSEC).update(`${t}.${raw}`).digest('hex');
+  assert.equal((await fetch(URL_ + '/functions/v1/api/stripe/webhook', { method: 'POST', headers: { 'Stripe-Signature': `t=${t},v1=${sig}` }, body: raw })).status, 200);
+  const v = await owner.api('GET', '/workspace');
+  assert.equal(new Date(v.doc.billing.cancelAt).getTime(), 1900000000 * 1000);
+  assert.equal(v.doc.billing.plan, 'Team', 'still on the plan until it ends');
+});
+
 test('CORS: only the site’s own address may call the API from a browser', { skip }, async () => {
   const good = await fetch(URL_ + '/functions/v1/api/config', { method: 'OPTIONS', headers: { Origin: 'http://localhost:5173' } });
   assert.equal(good.headers.get('access-control-allow-origin'), 'http://localhost:5173');
