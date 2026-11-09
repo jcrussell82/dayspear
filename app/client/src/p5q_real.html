@@ -213,6 +213,8 @@ function openVerify(it){
 /* ---------- the route guard: app screens need a signed-in session ---------- */
 function realGuard(){
   const h=location.hash;
+  if(h==='#admin'){ showAdmin(); return false; }
+  document.body.classList.remove('in-admin');
   if(h==='#login'&&SESSION){ if(LOADED) location.replace(isMgr(ME)?'#app/schedule':'#app/employee'); else loadWorkspace().then(route).catch(()=>{ SESSION=null; route(); }); return false; }
   if(!h.startsWith('#app')) return true;
   if(!SESSION){ location.replace('#login'); return false; }
@@ -394,6 +396,7 @@ function realPlanSection(){
   let alert='';
   if(b.status==='past_due') alert=`<div class="alert amber" style="margin-top:12px">ℹ<div><b>The last payment didn’t go through.</b> ${owner?'Update your card in Manage billing to keep your plan.':`${esc(ownerName())} has been asked to update the card.`}</div></div>`;
   else if(g) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div><b>You have ${n} active people; the ${esc(cur.name)} plan covers ${cur.limit}.</b> Nobody loses access. ${owner?`Upgrade by ${fmtDate(g.until)} (${g.days} days) to keep adding people.`:`${esc(ownerName())} has been asked to upgrade.`}</div></div>`;
+  else if(b.cancelAt&&paid) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div><b>Your ${esc(cur.name)} plan is cancelled and ends ${esc(fmtDate(new Date(b.cancelAt)))}.</b> ${owner?'After that the business moves to the Free plan (up to '+PRICING.plans[0].limit+' people). Changed your mind? Resume it in Manage billing.':`${esc(ownerName())} cancelled it; after that the business moves to the Free plan.`}</div></div>`;
   else if(n+pend>cur.limit) alert=`<div class="alert amber" style="margin-top:12px">ℹ<div>${n} active + ${pend} invited = ${n+pend}. If they all accept you’ll be over the ${esc(cur.name)} plan.</div></div>`;
   const mode=b.stripe==='test'?'Test mode — no real charges.':b.stripe==='off'?'Payments aren’t connected yet.':'';
   return `<div class="set-card"><div class="set-row"><div><h3 style="font-size:16px">Your plan</h3><p>${esc(mode)}${PRICING.provisional?' Prices are provisional.':''}</p></div>${PRICING.provisional?'<span class="prov-banner">⚑ Provisional</span>':''}</div>
@@ -403,7 +406,7 @@ function realPlanSection(){
       ${owner&&!b.hasSubscription?`<div style="margin-top:12px">${stripeNote()}</div>`:''}
       ${owner&&!b.hasSubscription&&(g||n+pend>=cur.limit)&&next?`<button class="btn btn-primary btn-sm" style="margin-top:12px" data-upgrade="${esc(next.name)}">Upgrade to ${esc(next.name)}</button>`:''}</div>
     <div class="plan-mini">${PRICING.plans.map(p=>`<div class="${p===cur?'cur':''}"><span class="muted">${esc(p.name)}${p===cur?' · current':''}</span><b>${p.price?PRICING.currency+p.price:'Free'}</b>${p.price?PRICING.period+' · ':''}up to ${p.limit} people${owner&&!b.hasSubscription&&p!==cur&&p.price>cur.price?`<button class="btn btn-ghost btn-xs" style="margin-top:8px;display:flex" data-upgrade="${esc(p.name)}">Choose ${esc(p.name)}</button>`:''}</div>`).join('')}</div>
-    ${owner&&b.hasSubscription?`<div class="set-row"><div><b>Billing</b><p>${b.periodEnd?`Renews ${esc(fmtDate(new Date(b.periodEnd)))} · `:''}Change plan, update your card, see invoices or cancel on Stripe’s secure page.</p></div><button class="btn btn-ghost btn-sm" id="chgCard">Manage billing</button></div>`:''}
+    ${owner&&b.hasSubscription?`<div class="set-row"><div><b>Billing</b><p>${b.cancelAt?`Ends ${esc(fmtDate(new Date(b.cancelAt)))} · `:b.periodEnd?`Renews ${esc(fmtDate(new Date(b.periodEnd)))} · `:''}Change plan, update your card, see invoices or cancel on Stripe’s secure page.</p></div><button class="btn btn-ghost btn-sm" id="chgCard">Manage billing</button></div>`:''}
     ${!owner?`<div class="set-row"><div><b>Only ${esc(ownerName())} (owner) can change the plan or billing.</b></div></div>`:''}
     <div class="set-row"><div><b>More than ${PRICING.plans[PRICING.plans.length-1].limit} people?</b><p>Let’s talk about what fits.</p></div><a class="btn btn-ghost btn-sm" href="#contact" data-topic="large">Contact us</a></div>
     <div class="set-row"><div><b>Every plan includes</b><p>${PRICING.included.map(esc).join(' · ')}</p></div></div></div>`;
@@ -429,6 +432,27 @@ function applyPricing(cfg){
 function addStyle(css){ const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s); }
 function realChrome(){
   document.body.classList.add('real');
+  addStyle(`body.in-admin #site, body.in-admin #app, body.in-admin #auth{display:none!important}
+    #adminPage{display:none} body.in-admin #adminPage{display:block;min-height:100vh;background:var(--surface-2);color:var(--ink)}
+    .adm-top{display:flex;align-items:center;gap:10px;padding:14px 28px;background:var(--surface)}
+    .adm-logo img{height:26px;display:block} .adm-tag{font-size:12px;font-weight:700;background:var(--deep);color:#fff;border-radius:999px;padding:3px 10px}
+    .adm-main{max-width:1200px;margin:0 auto;padding:26px 28px 60px;display:grid;gap:18px}
+    .adm-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap} .adm-head h1{font-size:26px;margin-bottom:4px}
+    .adm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+    .adm-tile{background:var(--surface);border-radius:18px;padding:16px 18px;display:grid;gap:4px}
+    .adm-tile span{font-size:12.5px;font-weight:600;color:var(--muted)} .adm-tile b{font-size:28px;font-family:var(--font-display,inherit);letter-spacing:-.01em} .adm-tile small{font-size:12px;color:var(--muted)}
+    .adm-row{display:grid;grid-template-columns:2fr 1fr;gap:14px} @media (max-width:860px){.adm-row{grid-template-columns:1fr}}
+    .adm-card{background:var(--surface);border-radius:18px;padding:18px 20px;min-width:0} .adm-card h2{font-size:16px;margin-bottom:12px}
+    .adm-bars{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;height:160px;align-items:end}
+    .adm-bars div{display:grid;grid-template-rows:1fr auto auto;height:100%;text-align:center;gap:3px} .adm-bars i{align-self:end;background:var(--green);border-radius:6px 6px 2px 2px;min-height:3px}
+    .adm-bars b{font-size:11px} .adm-bars small{font-size:10px;color:var(--muted);white-space:nowrap}
+    .adm-plan{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2)} .adm-plan b{font-size:16px}
+    .adm-tbl-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px} .adm-tbl-head h2{margin:0}
+    .adm-search{border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-width:260px;background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px}
+    .adm-tbl-wrap{overflow-x:auto} .adm-tbl{width:100%;border-collapse:collapse;font-size:13.5px;min-width:860px}
+    .adm-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)} .adm-tbl td{padding:10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+    .adm-tbl .num{text-align:right} .adm-tbl a{color:var(--green-ink)}
+    .adm-empty{background:var(--surface);border-radius:18px;padding:40px;text-align:center;display:grid;gap:10px;justify-items:center;max-width:520px;margin:40px auto}`);
   addStyle(`body.real.is-emp #app .sidebar, body.real.is-emp #app .mob-nav, body.real.is-emp #app #topbar{display:none!important}`);
   // a real employee gets the phone app itself at every screen size: no demo notes, no fake phone frame
   addStyle(`body.real.is-emp #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
@@ -509,6 +533,76 @@ function openDeleteAccount(){
 }
 document.addEventListener('click',e=>{ if(REAL&&e.target.closest('#deleteAcct')) openDeleteAccount(); });
 
+
+/* ---------- operator dashboard (#admin) — only for emails in the ADMIN_EMAILS function secret ---------- */
+const ADM={ q:'' };
+const admNum=n=>Number(n||0).toLocaleString('en-US');
+const admDate=v=>v?new Date(v).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+const admAgo=v=>{ if(!v) return '—'; const d=Math.floor((Date.now()-new Date(v))/864e5); return d<=0?'Today':d===1?'Yesterday':d<30?d+' days ago':admDate(v); };
+function adminShell(inner){
+  return `<header class="adm-top"><a href="#home" class="adm-logo"><img src="${LOGO}" alt="DaySpear"></a><span class="adm-tag">Admin</span><span style="flex:1"></span><button class="btn btn-ghost btn-sm" data-adm="refresh">Refresh</button><a class="btn btn-ghost btn-sm" href="#app/schedule">Open the app</a></header><main class="adm-main">${inner}</main>`;
+}
+function adminBody(s){
+  const plans=s.plan_info||[], paying=s.paying||{}, payN=Object.values(paying).reduce((a,b)=>a+b,0), ppl=s.people||{}, st=s.statuses||{};
+  const stripeUrl='https://dashboard.stripe.com/'+(s.stripe==='test'?'test/':'');
+  const tile=(label,big,sub)=>`<div class="adm-tile"><span>${label}</span><b>${big}</b><small>${sub}</small></div>`;
+  const wk=s.weekly_signups||[], max=Math.max(1,...wk.map(w=>w.n));
+  const q=ADM.q.trim().toLowerCase(); const list=(s.list||[]).filter(b=>!q||[b.name,b.owner_email,b.plan_id,b.id].join(' ').toLowerCase().includes(q));
+  const planName=id=>(plans.find(p=>p.id===id)||{name:id}).name;
+  const statusPill=b=>b.plan_id==='free'&&!b.subscription_status?'<span class="pill pill-gray nodot">Free</span>'
+    :b.subscription_status==='past_due'?'<span class="pill pill-amber nodot">Past due</span>'
+    :b.cancel_at?`<span class="pill pill-amber nodot">Ends ${esc(admDate(b.cancel_at))}</span>`
+    :['active','trialing'].includes(b.subscription_status)?'<span class="pill pill-green nodot">Paying</span>'
+    :`<span class="pill pill-gray nodot">${esc(b.subscription_status||'—')}</span>`;
+  return `<div class="adm-head"><div><h1>DaySpear at a glance</h1><p class="muted">Updated ${esc(new Date(s.generated_at).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}))}${s.stripe==='test'?' · <b>Stripe is in test mode</b>: subscriptions here aren’t real money':''}</p></div><a class="btn btn-ghost btn-sm" href="${stripeUrl}" target="_blank" rel="noopener">Payments in Stripe ↗</a></div>
+    <div class="adm-tiles">
+      ${tile('Businesses',admNum(s.businesses),`+${admNum(s.new_7d)} this week · +${admNum(s.new_30d)} in 30 days`)}
+      ${tile('Paying businesses',admNum(payN),plans.filter(p=>p.price).map(p=>`${esc(p.name)} ${admNum(paying[p.id]||0)}`).join(' · '))}
+      ${tile('Monthly recurring revenue',`$${admNum(s.mrr)}`,`Estimated from plan prices${s.cancelling?` · ${admNum(s.cancelling)} cancelling`:''}${st.past_due?` · ${admNum(st.past_due)} past due`:''}`)}
+      ${tile('People on teams',admNum(ppl.active),`${admNum(ppl.invited)} invited · ${admNum(s.sign_ins)} sign-ins`)}
+      ${tile('Active businesses',admNum(s.active_7d),`opened or changed in 7 days · ${admNum(s.active_30d)} in 30 days`)}
+    </div>
+    <div class="adm-row">
+      <section class="adm-card"><h2>New businesses per week</h2><div class="adm-bars">${wk.map(w=>`<div title="Week of ${esc(admDate(w.week))}: ${w.n}"><i style="height:${Math.round(w.n/max*100)}%"></i><b>${w.n||''}</b><small>${esc(new Date(w.week+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}))}</small></div>`).join('')}</div></section>
+      <section class="adm-card"><h2>Plans</h2>${plans.map(p=>`<div class="adm-plan"><span>${esc(p.name)} <small class="muted">${p.price?'$'+p.price+'/mo':'free'} · up to ${p.limit}</small></span><b>${admNum((s.plans||{})[p.id]||0)}</b></div>`).join('')}
+        <p class="muted" style="font-size:12px;margin-top:10px">Businesses on each plan. Stripe is the source of truth for payments, refunds and invoices.</p></section>
+    </div>
+    <section class="adm-card"><div class="adm-tbl-head"><h2>Businesses <small class="muted">${admNum(list.length)}${q?' matching':''}</small></h2><input class="adm-search" placeholder="Search name, owner email or plan" value="${esc(ADM.q)}" data-adm-search></div>
+      <div class="adm-tbl-wrap"><table class="adm-tbl"><thead><tr><th>Business</th><th>Owner</th><th>Plan</th><th>Status</th><th class="num">People</th><th class="num">Locations</th><th class="num">Shifts</th><th>Joined</th><th>Last active</th></tr></thead>
+      <tbody>${list.map(b=>`<tr><td><b>${esc(b.name)}</b></td><td>${b.owner_email?`<a href="mailto:${esc(b.owner_email)}">${esc(b.owner_email)}</a>`:'—'}</td><td>${esc(planName(b.plan_id))}</td><td>${statusPill(b)}</td><td class="num">${admNum(b.active_people)}${b.invited_people?` <small class="muted">+${b.invited_people}</small>`:''}</td><td class="num">${admNum(b.locations)}</td><td class="num">${admNum(b.shifts)}</td><td>${esc(admDate(b.created_at))}</td><td>${esc(admAgo(b.last_change))}</td></tr>`).join('')||'<tr><td colspan="9" class="muted">No businesses yet.</td></tr>'}</tbody></table></div>
+      <p class="muted" style="font-size:12px;margin-top:10px">Business-level details only. Team members’ names, contact details and messages aren’t shown here.</p></section>`;
+}
+let ADM_DATA=null;
+async function showAdmin(force){
+  document.body.classList.add('in-admin'); document.body.classList.remove('in-auth','in-app','emp-mode'); document.title='Admin · DaySpear';
+  let el=$('#adminPage'); if(!el){ el=document.createElement('div'); el.id='adminPage'; document.body.appendChild(el); }
+  if(ADM_DATA&&!force){ el.innerHTML=adminShell(adminBody(ADM_DATA)); return; }
+  el.innerHTML=adminShell('<p class="muted" style="padding:40px 0">Loading…</p>');
+  if(!(await accessToken())){ el.innerHTML=adminShell(`<div class="adm-empty"><h2>Sign in first</h2><p class="muted">Sign in with your admin email, then come back to dayspear.com/#admin.</p><a class="btn btn-primary btn-sm" href="#login">Sign in</a></div>`); return; }
+  try{ ADM_DATA=await API('GET','/admin/stats'); if(location.hash==='#admin') el.innerHTML=adminShell(adminBody(ADM_DATA)); }
+  catch(e){ el.innerHTML=adminShell(`<div class="adm-empty"><h2>${e.status===404?'Not available':'Couldn’t load the dashboard'}</h2><p class="muted">${e.status===404?'This page is only for DaySpear admins.':esc(e.message)}</p><a class="btn btn-ghost btn-sm" href="#home">Back to homepage</a></div>`); }
+}
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-adm]'); if(b&&b.dataset.adm==='refresh') showAdmin(true); });
+document.addEventListener('input',e=>{ if(!e.target.matches('[data-adm-search]')||!ADM_DATA) return; ADM.q=e.target.value; const pos=e.target.selectionStart; $('#adminPage').innerHTML=adminShell(adminBody(ADM_DATA)); const i=$('[data-adm-search]'); i.focus(); i.setSelectionRange(pos,pos); });
+
+/* ---------- Google Tag Manager — public marketing pages only ----------
+   Tag Manager can run any script set up in its container. So it never loads inside the app,
+   on sign-in/sign-up/invite screens, on the admin page, or for anyone with a saved sign-in:
+   from a page with Tag Manager, going to one of those screens reloads the page without it. */
+const GTM_ID='GTM-KXD74BK2';
+const privateHash=h=>/^#(app|login|signup|invite|admin)\b/.test(h);
+let GTM_ON=false;
+function startAnalytics(){
+  if(GTM_ON||!GTM_ID||!/(^|\.)dayspear\.com$/.test(location.hostname)||/[?&]demo\b/.test(location.search)||privateHash(location.hash)||store.get()) return;
+  GTM_ON=true; window.dataLayer=window.dataLayer||[]; window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
+  const sc=document.createElement('script'); sc.async=true; sc.src='https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(GTM_ID); document.head.appendChild(sc);
+}
+window.addEventListener('hashchange',()=>{
+  if(!GTM_ON){ if(REAL) startAnalytics(); return; }
+  if(privateHash(location.hash)){ location.reload(); return; }
+  setTimeout(()=>window.dataLayer.push({event:'dayspear_page_view',page_path:'/'+location.hash.replace(/^#/,''),page_title:document.title}),0); // after the page title updates
+});
+
 async function boot(){
   const wantDemo=/[?&]demo\b/.test(location.search);
   if(SB_URL&&SB_KEY&&!wantDemo){ try{ CFG=await API('GET','/config'); }catch(e){ CFG=null; console.warn('DaySpear: couldn’t reach Supabase — showing the demo.', e); } }
@@ -518,4 +612,5 @@ async function boot(){
     if(SESSION&&location.hash.startsWith('#app')){ try{ await loadWorkspace(); }catch(e){ SESSION=null; } }
   } else demoChrome();
   route();
+  if(REAL) startAnalytics();
 }
