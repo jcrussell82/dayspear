@@ -82,6 +82,7 @@ On the real site, the homepage "preview" buttons open the demo.
 | `STRIPE_SECRET_KEY` (`sk_test_…`), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_BUSINESS` | Billing. Without them, the plan page says payments aren't connected. |
 | `ALLOW_LIVE_PAYMENTS` | `false`. Leave it until you've decided to take real payments. |
 | `PLANS_JSON` | *(optional)* Change the prices and limits the app displays without editing code. |
+| `ADMIN_EMAILS` | Your sign-in email(s), comma-separated. Those accounts can open **dayspear.com/#admin**: businesses, plans, estimated revenue and activity across DaySpear. |
 | `PRICING_PROVISIONAL` | *(optional)* `true` shows "Early-access pricing" on the site. Leave unset now that prices are final. |
 | `STRIPE_REQUIRE_TERMS` | `true` once your Terms of Service page is live and its URL is set in Stripe. Checkout then asks people to agree before paying. |
 
@@ -142,6 +143,10 @@ Do the whole thing in a **sandbox / test mode** first, then repeat it in **live 
 `supabase/functions/api/plans.js` controls what the app shows. Stripe's prices control what's charged, so keep them matching.
 
 ---
+
+## Analytics
+
+Google Tag Manager (`GTM-KXD74BK2`, set in `client/src/p5q_real.html`) loads **only on the public marketing pages** of dayspear.com: never inside the app, on sign-in, sign-up or invite screens, on #admin, or for anyone with a saved sign-in. Moving from a page with Tag Manager to one of those screens reloads the page without it, so tags in the container can never read app data or sign-in sessions. Each marketing page change sends a `dayspear_page_view` event to the data layer (use a *Custom Event* or *History Change* trigger for GA4 page views). The site's security policy allows Google Tag Manager and Google Analytics only; other third-party tags added in the container will be blocked unless the policy in `build.mjs` is widened.
 
 ## Developing and testing
 
