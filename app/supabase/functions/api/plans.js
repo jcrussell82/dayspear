@@ -3,7 +3,7 @@
 // The client reads these through GET /api/config, and the server uses them for
 // plan limits and Stripe checkout. Prices here are for display only: the amount
 // actually charged comes from the Stripe Price referenced by `stripePriceEnv`.
-// Provisional example pricing — review before launch.
+// Launch pricing confirmed by the owner on Nov 9 2026: Free (10), Team $8 (25), Business $18 (75).
 // ---------------------------------------------------------------------------
 export const PLANS = [
   { id: 'free',     name: 'Free',     price: 0,  limit: 10, blurb: 'For a small team getting started.',          cta: 'Start free' },
@@ -14,7 +14,7 @@ export const PLANS = [
 export const PRICING = {
   currency: '$',
   period: '/month',
-  provisional: Deno.env.get('PRICING_PROVISIONAL') !== 'false', // set the function secret PRICING_PROVISIONAL=false at launch
+  provisional: Deno.env.get('PRICING_PROVISIONAL') === 'true', // launch prices confirmed Nov 9 2026; set PRICING_PROVISIONAL=true to show "Early-access pricing" again
   contactAbove: 75, // teams larger than the biggest plan are asked to contact us
   graceDays: 14,    // days an owner has to upgrade after acceptances push them over
   included: ['Unlimited locations', 'Schedule, time off & coverage', 'Announcements & team chat', 'Checklists & to-dos', 'Phone access for everyone'],
