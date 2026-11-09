@@ -14,7 +14,7 @@ function renderSignup(){
       <div class="field"><label for="su-email">Work email</label><input id="su-email" type="email" autocomplete="email" value="${esc(d.email)}"><span class="muted" style="font-size:12px">You’ll sign in with this. As the owner, it’s also how you recover your account.</span></div>
       <div class="field"><label for="su-phone">Mobile number <span class="muted" style="font-weight:400">(optional)</span></label><input id="su-phone" type="tel" autocomplete="tel" value="${esc(d.phone)}"><span class="muted" style="font-size:12px">Lets you sign in by text, too.</span></div>
       ${err}<button class="btn btn-primary auth-cta" type="submit">Continue</button>
-      <p class="auth-hint">By continuing you agree to the Terms and Privacy Policy (prototype — not written yet).</p>
+      <p class="auth-hint">By continuing you agree to the <a href="#terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form><p class="auth-foot">Already use DaySpear? <a href="#login">Sign in</a></p>`;
   }
   if(SU.step==='code'){

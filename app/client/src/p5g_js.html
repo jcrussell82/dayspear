@@ -15,7 +15,7 @@ function render(){
   document.title = `${TITLES[UI.view]} · DaySpear${REAL?'':' demo'}`;
 }
 function go(v){ if(location.hash==='#app/'+v){ UI.view=v; render(); } else location.hash='#app/'+v; }
-const PAGES={home:'Home',product:'Product','how-it-works':'How it works',pricing:'Pricing',faq:'FAQ',contact:'Contact'};
+const PAGES={home:'Home',product:'Product','how-it-works':'How it works',pricing:'Pricing',faq:'FAQ',contact:'Contact',terms:'Terms of Service',privacy:'Privacy Policy'};
 function route(){
   if(REAL&&!realGuard()) return;
   const h=location.hash;
