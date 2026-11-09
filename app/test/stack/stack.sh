@@ -51,7 +51,7 @@ node "$HERE/gateway.mjs" >"$RUN/gateway.log" 2>&1 & echo $! >"$RUN/gateway.pid"
 
 (cd "$APP/supabase/functions/api" && SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY="$SERVICE" APP_URL="$APP_URL" ALLOWED_ORIGINS="$APP_URL,http://localhost:5173" \
   STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-sk_test_fake}" STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-whsec_test_local}" STRIPE_PRICE_TEAM=price_team_test STRIPE_PRICE_BUSINESS=price_biz_test \
-  STRIPE_API_BASE=http://127.0.0.1:54350 DENO_DIR="$RUN/deno" \
+  STRIPE_API_BASE=http://127.0.0.1:54350 ADMIN_EMAILS="${ADMIN_EMAILS:-admin@dayspear.test}" DENO_DIR="$RUN/deno" \
   nohup "$BIN/deno" run --allow-net --allow-env "$HERE/fn-local.ts" >"$RUN/fn.log" 2>&1 & echo $! >"$RUN/fn.pid")
 
 for i in $(seq 1 60); do curl -sf http://127.0.0.1:54321/functions/v1/api/health >/dev/null 2>&1 && curl -sf http://127.0.0.1:54321/auth/v1/health >/dev/null 2>&1 && break; sleep 0.25; done
