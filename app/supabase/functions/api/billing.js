@@ -45,6 +45,7 @@ export async function createCheckout(biz, owner, planId) {
   if (!plan.stripePriceEnv) throw new HttpError(400, 'Choose a paid plan.');
   const price = priceFor(plan);
   if (!price && stripeEnabled()) throw new HttpError(501, `The Stripe price for ${plan.name} isn’t set (${plan.stripePriceEnv}).`, { code: 'stripe_price_missing' });
+  if (price && !price.startsWith('price_')) throw new HttpError(501, `${plan.stripePriceEnv} should be a Stripe price ID (price_…), not “${price.slice(0, 5)}…”. Copy it from the price, not the product.`, { code: 'stripe_price_invalid' });
   if (biz.stripe_subscription_id && ['active', 'trialing', 'past_due'].includes(biz.subscription_status)) return createPortal(biz); // already subscribed
   let customer = biz.stripe_customer_id;
   // A customer saved while testing doesn't exist in live mode (or another Stripe account): start a fresh one.
@@ -133,6 +134,8 @@ async function applySubscription(sub) {
   await db.update('businesses', `id=${db.eq(biz.id)}`, {
     stripe_subscription_id: sub.id, subscription_status: sub.status, plan_id: ended || !plan ? 'free' : plan.id,
     // newer Stripe API versions keep the period end on the subscription item instead
+    // when the owner has cancelled: the date the plan ends (null if it renews)
+    cancel_at: ended ? null : (() => { const t = sub.cancel_at || (sub.cancel_at_period_end ? (sub.current_period_end || sub.items?.data?.[0]?.current_period_end) : null); return t ? new Date(t * 1000).toISOString() : null; })(),
     current_period_end: (() => { const t = sub.current_period_end || sub.items?.data?.[0]?.current_period_end; return t ? new Date(t * 1000).toISOString() : null; })(),
   });
 }

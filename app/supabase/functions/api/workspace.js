@@ -76,12 +76,12 @@ export function viewFor(doc, actor, biz) {
   const st = planState(biz, doc);
   v.billing = {
     plan: st.plan.name, planId: st.plan.id, status: biz.subscription_status || (st.plan.id === 'free' ? 'free' : null),
-    periodEnd: biz.current_period_end, graceUntil: biz.grace_until, stripe: stripeMode(),
+    periodEnd: biz.current_period_end, cancelAt: biz.cancel_at || null, graceUntil: biz.grace_until, stripe: stripeMode(),
     hasSubscription: Boolean(biz.stripe_subscription_id),
   };
   v.me = actor.id;
   if (isMgr(me)) {
-    if (!isOwner(me)) delete v.billing.periodEnd;
+    if (!isOwner(me)) { delete v.billing.periodEnd; delete v.billing.cancelAt; }
     return v;
   }
   // ---- employee view: only what they need, nothing private about others ----
@@ -103,7 +103,7 @@ export function viewFor(doc, actor, biz) {
   v.checklists = (v.checklists || []).filter(c => myLocs.includes(c.loc));
   v.messages = Object.fromEntries(Object.entries(v.messages || {}).filter(([ch]) => canUseChannel(doc, actor, ch)));
   v.deleted = {}; v.published = {};
-  delete v.billing.periodEnd; delete v.billing.hasSubscription;
+  delete v.billing.periodEnd; delete v.billing.cancelAt; delete v.billing.hasSubscription;
   return v;
 }
 

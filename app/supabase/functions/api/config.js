@@ -14,6 +14,8 @@ export const config = {
   allowedOrigins: env('ALLOWED_ORIGINS', env('APP_URL', 'http://localhost:5173')).split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean),
   // Set to "true" only after turning on phone sign-in (Twilio) in Supabase Auth.
   sms: env('SMS_ENABLED') === 'true',
+  // DaySpear operators who can open the #admin dashboard (comma-separated sign-in emails).
+  adminEmails: env('ADMIN_EMAILS').toLowerCase().split(',').map(s => s.trim()).filter(Boolean),
   email: { resendKey: env('RESEND_API_KEY'), from: env('EMAIL_FROM', 'DaySpear <no-reply@example.com>'), contact: env('CONTACT_EMAIL') },
   stripe: {
     secretKey: env('STRIPE_SECRET_KEY'),

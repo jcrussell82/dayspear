@@ -109,7 +109,7 @@ route('GET', '/session', async ({ req }) => {
   const user = await getUser(req);
   if (!user) return { signedIn: false };
   const mems = await memberships(user.id);
-  return { signedIn: true, email: user.email, businesses: mems.map(m => ({ businessId: m.business_id, personId: m.person_id, name: m.businesses?.name })) };
+  return { signedIn: true, email: user.email, admin: isAdmin(user), businesses: mems.map(m => ({ businessId: m.business_id, personId: m.person_id, name: m.businesses?.name })) };
 });
 
 // ---- sign up a new business (the owner has already confirmed their email with Supabase Auth)
@@ -269,6 +269,22 @@ route('POST', '/account/delete', async ({ req }) => {
   }
   if (!(await deleteAuthUser(user.id))) throw new HttpError(502, 'Your team data was removed, but we couldn’t delete the sign-in itself. Please contact us.');
   return { ok: true, businessesDeleted: deleted.length };
+});
+
+// ---- operator dashboard: only for confirmed sign-in emails listed in ADMIN_EMAILS
+function isAdmin(user) {
+  const e = String(user?.email || '').toLowerCase();
+  return Boolean(e && user.email_confirmed_at && config.adminEmails.includes(e));
+}
+route('GET', '/admin/stats', async ({ req }) => {
+  const user = await requireUser(req);
+  if (!isAdmin(user)) throw new HttpError(404, 'Not found');
+  const s = await db.rpc('admin_stats', {});
+  const price = id => (PLANS.find(p => p.id === id) || {}).price || 0;
+  s.mrr = Object.entries(s.paying || {}).reduce((sum, [id, n]) => sum + price(id) * n, 0);
+  s.plan_info = PLANS.map(({ id, name, price: pr, limit }) => ({ id, name, price: pr, limit }));
+  s.stripe = stripeMode();
+  return s;
 });
 
 // ---- contact form (homepage) → CONTACT_EMAIL
