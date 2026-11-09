@@ -286,6 +286,34 @@ test('billing: owner checkout creates a Stripe subscription session (test mode)'
   assert.equal((await owner.api('POST', '/billing/portal')).url, 'https://billing.stripe.test/p/1');
 });
 
+test('billing: a customer saved in another Stripe mode is replaced, not reused', { skip }, async () => {
+  const o4 = person();
+  await signup(o4, em('owner4'), 'Mode Switch Café');
+  const bizId = (await o4.api('GET', '/session')).businesses[0].businessId;
+  await fetch(`${URL_}/rest/v1/businesses?id=eq.${bizId}`, { method: 'PATCH', headers: { apikey: SERVICE, Authorization: 'Bearer ' + SERVICE, 'Content-Type': 'application/json' }, body: JSON.stringify({ stripe_customer_id: 'cus_from_test_mode' }) });
+  assert.equal((await o4.api('POST', '/billing/portal')).status, 400, 'no portal for a customer Stripe doesn’t know');
+  const r = await o4.api('POST', '/billing/checkout', { planId: 'team' });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const calls = await (await fetch(STRIPE_LOG)).json();
+  const cs = calls.find(c => c.url === '/v1/checkout/sessions');
+  assert.match(cs.body.customer, /^cus_fake_/, 'a fresh customer was created');
+  assert.equal(cs.body.billing_address_collection, 'auto');
+});
+
+test('Stripe webhooks: newer API versions (period end on the item, invoice parent) are understood', { skip }, async () => {
+  const bizId = (await owner.api('GET', '/session')).businesses[0].businessId;
+  const sign = raw => { const t = Math.floor(Date.now() / 1000); return { t, s: crypto.createHmac('sha256', WHSEC).update(`${t}.${raw}`).digest('hex') }; };
+  const send = async ev => { const raw = JSON.stringify(ev); const { t, s } = sign(raw); return fetch(URL_ + '/functions/v1/api/stripe/webhook', { method: 'POST', headers: { 'Stripe-Signature': `t=${t},v1=${s}` }, body: raw }); };
+  const subId = 'sub_new_' + run;
+  let r = await send({ id: 'evt_n1' + run, type: 'customer.subscription.updated', data: { object: { id: subId, customer: 'cus_n_' + run, status: 'active', metadata: { business_id: bizId }, items: { data: [{ current_period_end: 1900000000, price: { id: 'price_team_test' } }] } } } });
+  assert.equal(r.status, 200);
+  const rows = async () => (await (await fetch(`${URL_}/rest/v1/businesses?id=eq.${bizId}&select=subscription_status,current_period_end`, { headers: { apikey: SERVICE, Authorization: 'Bearer ' + SERVICE } })).json())[0];
+  assert.ok((await rows()).current_period_end, 'period end read from the subscription item');
+  r = await send({ id: 'evt_n2' + run, type: 'invoice.payment_failed', data: { object: { id: 'in_1', parent: { subscription_details: { subscription: subId } } } } });
+  assert.equal(r.status, 200);
+  assert.equal((await rows()).subscription_status, 'past_due');
+});
+
 test('Stripe webhooks: bad signatures are rejected, good ones change the plan once', { skip }, async () => {
   const bizId = (await owner.api('GET', '/session')).businesses[0].businessId;
   const event = { id: 'evt_' + crypto.randomBytes(6).toString('hex'), type: 'customer.subscription.updated',
