@@ -19,7 +19,7 @@ const PORT = Number(process.env.GATEWAY_PORT || 54321);
 const UP = { auth: Number(process.env.AUTH_PORT || 9999), rest: Number(process.env.REST_PORT || 54330), fn: Number(process.env.FN_PORT || 54340) };
 const SMTP_PORT = Number(process.env.SMTP_PORT || 2525);
 const STRIPE_PORT = Number(process.env.STRIPE_PORT || 54350);
-const mail = [], stripeCalls = [];
+const mail = [], stripeCalls = [], customers = new Set();
 
 function proxy(req, res, port, newPath) {
   const p = http.request({ host: '127.0.0.1', port, path: newPath, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${port}`, 'x-forwarded-for': req.socket.remoteAddress } }, r => {
@@ -84,7 +84,8 @@ http.createServer((req, res) => {
   let body = ''; req.on('data', c => body += c); req.on('end', () => {
     stripeCalls.unshift({ method: req.method, url: req.url, auth: req.headers.authorization, body: Object.fromEntries(new URLSearchParams(body)) });
     res.setHeader('Content-Type', 'application/json');
-    if (req.url === '/v1/customers') return res.end(JSON.stringify({ id: 'cus_fake_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }));
+    if (req.url === '/v1/customers') { const id = 'cus_fake_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); customers.add(id); return res.end(JSON.stringify({ id })); }
+    if (req.method === 'GET' && req.url.startsWith('/v1/customers/')) { const id = req.url.slice('/v1/customers/'.length); if (customers.has(id)) return res.end(JSON.stringify({ id })); res.statusCode = 404; return res.end(JSON.stringify({ error: { code: 'resource_missing' } })); }
     if (req.url === '/v1/checkout/sessions') return res.end(JSON.stringify({ id: 'cs_fake', url: 'https://checkout.stripe.test/c/cs_fake' }));
     if (req.url === '/v1/billing_portal/sessions') return res.end(JSON.stringify({ url: 'https://billing.stripe.test/p/1' }));
     res.statusCode = 404; res.end('{}');
