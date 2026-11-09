@@ -423,6 +423,8 @@ function applyPricing(cfg){
   PRICING.currency=cfg.pricing.currency; PRICING.period=cfg.pricing.period; PRICING.included=cfg.pricing.included; PRICING.provisional=cfg.pricing.provisional;
   PRICING.plans=cfg.plans.map(p=>({id:p.id,name:p.name,price:p.price,limit:p.limit,blurb:p.blurb,cta:p.cta,featured:!!p.featured}));
   renderPlans();
+  // homepage/pricing banners: "early access" while prices are provisional, gone once they're final
+  $$('.prov-banner').forEach(b=>{ if(PRICING.provisional) b.textContent='⚑ Early-access pricing — may change before launch'; else { const w=b.parentElement; (w&&w.classList.contains('reveal')&&w.children.length===1?w:b).remove(); } });
 }
 function addStyle(css){ const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s); }
 function realChrome(){
