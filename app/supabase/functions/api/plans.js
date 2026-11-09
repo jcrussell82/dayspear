@@ -14,7 +14,7 @@ export const PLANS = [
 export const PRICING = {
   currency: '$',
   period: '/month',
-  provisional: true,
+  provisional: Deno.env.get('PRICING_PROVISIONAL') !== 'false', // set the function secret PRICING_PROVISIONAL=false at launch
   contactAbove: 75, // teams larger than the biggest plan are asked to contact us
   graceDays: 14,    // days an owner has to upgrade after acceptances push them over
   included: ['Unlimited locations', 'Schedule, time off & coverage', 'Announcements & team chat', 'Checklists & to-dos', 'Phone access for everyone'],

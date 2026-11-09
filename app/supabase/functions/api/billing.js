@@ -19,6 +19,14 @@ async function stripe(method, path, params) {
   if (!r.ok) { console.error('[stripe]', r.status, json.error?.message); throw new HttpError(502, 'Stripe couldn’t complete that request. Please try again.'); }
   return json;
 }
+// true if the object exists in this Stripe account and mode (and isn't deleted)
+async function stripeExists(path) {
+  const r = await fetch(`${config.stripe.apiBase}/v1${path}`, { headers: { Authorization: `Bearer ${config.stripe.secretKey}`, 'Stripe-Version': '2024-06-20' } });
+  if (r.status === 404) return false;
+  if (!r.ok) return true; // unsure (rate limit, outage): let the real request decide
+  const j = await r.json().catch(() => ({}));
+  return !j.deleted;
+}
 // Stripe expects nested form fields like line_items[0][price]=...
 function flatten(obj, prefix = '', out = {}) {
   for (const [k, v] of Object.entries(obj)) {
@@ -39,6 +47,11 @@ export async function createCheckout(biz, owner, planId) {
   if (!price && stripeEnabled()) throw new HttpError(501, `The Stripe price for ${plan.name} isn’t set (${plan.stripePriceEnv}).`, { code: 'stripe_price_missing' });
   if (biz.stripe_subscription_id && ['active', 'trialing', 'past_due'].includes(biz.subscription_status)) return createPortal(biz); // already subscribed
   let customer = biz.stripe_customer_id;
+  // A customer saved while testing doesn't exist in live mode (or another Stripe account): start a fresh one.
+  if (customer && !(await stripeExists(`/customers/${customer}`))) {
+    customer = null;
+    await db.update('businesses', `id=${db.eq(biz.id)}`, { stripe_customer_id: null, stripe_subscription_id: null, subscription_status: null });
+  }
   if (!customer) {
     const c = await stripe('POST', '/customers', { name: biz.name, email: owner.email || undefined, metadata: { business_id: biz.id } });
     customer = c.id;
@@ -52,12 +65,14 @@ export async function createCheckout(biz, owner, planId) {
     success_url: `${config.appUrl}/#app/settings/plan?checkout=success`,
     cancel_url: `${config.appUrl}/#app/settings/plan?checkout=cancelled`,
     allow_promotion_codes: 'true',
+    billing_address_collection: 'auto',
+    ...(config.stripe.requireTerms ? { consent_collection: { terms_of_service: 'required' } } : {}),
   });
   return { url: session.url };
 }
 
 export async function createPortal(biz) {
-  if (!biz.stripe_customer_id) throw new HttpError(400, 'There’s no billing account yet — choose a paid plan first.');
+  if (!biz.stripe_customer_id || !(await stripeExists(`/customers/${biz.stripe_customer_id}`))) throw new HttpError(400, 'There’s no billing account yet — choose a paid plan first.');
   const s = await stripe('POST', '/billing_portal/sessions', { customer: biz.stripe_customer_id, return_url: `${config.appUrl}/#app/settings/plan` });
   return { url: s.url };
 }
@@ -98,7 +113,10 @@ export async function handleWebhook(event) {
       await applySubscription(o);
       break;
     case 'invoice.payment_failed':
-      if (o.subscription) await db.update('businesses', `stripe_subscription_id=${db.eq(o.subscription)}`, { subscription_status: 'past_due' });
+    { // the subscription id moved under `parent` in newer Stripe API versions
+      const subId = o.subscription || o.parent?.subscription_details?.subscription;
+      if (subId) await db.update('businesses', `stripe_subscription_id=${db.eq(typeof subId === 'string' ? subId : subId.id)}`, { subscription_status: 'past_due' });
+    }
       break;
     default: break;
   }
@@ -114,6 +132,7 @@ async function applySubscription(sub) {
   const ended = ['canceled', 'incomplete_expired', 'unpaid'].includes(sub.status);
   await db.update('businesses', `id=${db.eq(biz.id)}`, {
     stripe_subscription_id: sub.id, subscription_status: sub.status, plan_id: ended || !plan ? 'free' : plan.id,
-    current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+    // newer Stripe API versions keep the period end on the subscription item instead
+    current_period_end: (() => { const t = sub.current_period_end || sub.items?.data?.[0]?.current_period_end; return t ? new Date(t * 1000).toISOString() : null; })(),
   });
 }
