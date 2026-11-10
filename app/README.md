@@ -38,7 +38,7 @@ Browser ──► GitHub Pages (index.html, app.js, app.css, config.js)
 - **Phone numbers:** a coworker's number is shown only when the business allows sharing *and* that person opts in. Managers see contact details for their team.
 - **Invite links:** single-use, expire after 7 days, and are stored as hashes.
 - **Secrets stay in Supabase:** Stripe and email keys live only in Supabase's function secrets. The build refuses to put a secret key into the site.
-- **Stripe live keys** are refused unless `ALLOW_LIVE_PAYMENTS=true`.
+- **Stripe live keys** (`sk_live_` or restricted `rk_live_`) are refused unless `ALLOW_LIVE_PAYMENTS=true`.
 
 ### Demo vs real
 
@@ -82,6 +82,9 @@ On the real site, the homepage "preview" buttons open the demo.
 | `STRIPE_SECRET_KEY` (`sk_test_…`), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_BUSINESS` | Billing. Without them, the plan page says payments aren't connected. |
 | `ALLOW_LIVE_PAYMENTS` | `false`. Leave it until you've decided to take real payments. |
 | `PLANS_JSON` | *(optional)* Change the prices and limits the app displays without editing code. |
+| `ADMIN_EMAILS` | Your sign-in email(s), comma-separated. Those accounts can open **dayspear.com/#admin**: businesses, plans, estimated revenue and activity across DaySpear. |
+| `PRICING_PROVISIONAL` | *(optional)* `true` shows "Early-access pricing" on the site. Leave unset now that prices are final. |
+| `STRIPE_REQUIRE_TERMS` | `true` once your Terms of Service page is live and its URL is set in Stripe. Checkout then asks people to agree before paying. |
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided to the function automatically.
 
@@ -112,20 +115,38 @@ supabase secrets set --env-file supabase/functions/.env
 3. Wait for GitHub to show the domain as verified, then tick **Enforce HTTPS**.
 4. Update `APP_URL`, `ALLOWED_ORIGINS` and Supabase's **Site URL** to the new address.
 
-### 6. Stripe (test mode)
+### 6. Stripe (test first, then live)
 
-1. Stripe → **Test mode** → **Products**:
-   - "DaySpear Team": recurring monthly price, $8.
-   - "DaySpear Business": $18.
+Do the whole thing in a **sandbox / test mode** first, then repeat it in **live mode**. Test and live have separate products, prices, keys, webhooks and portal settings — nothing carries over.
+
+1. **Products** → add:
+   - "DaySpear Team": recurring, monthly, flat price (e.g. $8).
+   - "DaySpear Business": recurring, monthly, flat price (e.g. $18).
    - Copy each `price_…` into `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS`.
-2. **Developers → API keys** → secret test key → `STRIPE_SECRET_KEY`.
-3. **Developers → Webhooks** → add an endpoint at `https://<ref>.supabase.co/functions/v1/api/stripe/webhook`. Add the events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` and `invoice.payment_failed`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. **Settings → Billing → Customer portal** → turn it on.
-5. Test it: owner → Settings › Plan → Choose Team. Pay with `4242 4242 4242 4242`, any future date and any CVC. The plan switches within seconds.
+2. **Developers → API keys** → create a **restricted key** with only:
+   - Customers: **Write**
+   - Checkout Sessions: **Write**
+   - Customer portal: **Write**
+   - Subscriptions: **Read**
+   Put it in `STRIPE_SECRET_KEY` (`rk_test_…` / `rk_live_…`). A full secret key works too, but a restricted one limits the damage if it ever leaks.
+3. **Developers → Webhooks** → add an endpoint at `https://<ref>.supabase.co/functions/v1/api/stripe/webhook` with the events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` and `invoice.payment_failed`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+4. **Settings → Billing → Customer portal** → turn it on. Allow: update payment method, view invoices, cancel (at end of period), and **switch plans** between the Team and Business products.
+5. **Test it:** owner → Settings › Plan → Choose Team → pay with `4242 4242 4242 4242`. The plan switches within seconds. Then use Manage billing to switch to Business, and to cancel.
+6. **Going live** (only when you're ready to charge real cards):
+   - In Stripe **Settings → Public details**: business name, support email, and your Terms of Service and Privacy Policy URLs.
+   - Repeat steps 1–4 in live mode and replace the four Stripe secrets with the live values.
+   - Set `ALLOW_LIVE_PAYMENTS=true`, and `STRIPE_REQUIRE_TERMS=true` (the Terms page is at `https://dayspear.com/#terms`, Privacy at `https://dayspear.com/#privacy`).
+   - **Settings → Billing → Subscriptions and emails**: turn on emails for failed payments and expiring cards, and keep Smart Retries on (the Terms say Stripe retries and emails the owner).
+   - Run **Deploy Supabase** (secrets apply when the function restarts; deploying guarantees it).
+   - Make one real purchase with your own card, check the plan switches, then refund and cancel it in Stripe.
 
 `supabase/functions/api/plans.js` controls what the app shows. Stripe's prices control what's charged, so keep them matching.
 
 ---
+
+## Analytics
+
+Google Tag Manager (`GTM-KXD74BK2`, set in `client/src/p5q_real.html`) loads **only on the public marketing pages** of dayspear.com: never inside the app, on sign-in, sign-up or invite screens, on #admin, or for anyone with a saved sign-in. Moving from a page with Tag Manager to one of those screens reloads the page without it, so tags in the container can never read app data or sign-in sessions. Each marketing page change sends a `dayspear_page_view` event to the data layer (use a *Custom Event* or *History Change* trigger for GA4 page views). The site's security policy allows Google Tag Manager and Google Analytics only; other third-party tags added in the container will be blocked unless the policy in `build.mjs` is widened.
 
 ## Developing and testing
 
