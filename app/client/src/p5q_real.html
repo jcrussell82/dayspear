@@ -594,7 +594,10 @@ const privateHash=h=>/^#(app|login|signup|invite|admin)\b/.test(h);
 let GTM_ON=false;
 function startAnalytics(){
   if(GTM_ON||!GTM_ID||!/(^|\.)dayspear\.com$/.test(location.hostname)||/[?&]demo\b/.test(location.search)||privateHash(location.hash)||store.get()) return;
-  GTM_ON=true; window.dataLayer=window.dataLayer||[]; window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
+  GTM_ON=true; window.dataLayer=window.dataLayer||[];
+  // same as Google's snippet: gtag('js', new Date()) for the Google tag, plus the usual Tag Manager start event
+  window.gtag=window.gtag||function(){ window.dataLayer.push(arguments); }; window.gtag('js',new Date());
+  window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
   const sc=document.createElement('script'); sc.async=true; sc.src='https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(GTM_ID); document.head.appendChild(sc);
 }
 window.addEventListener('hashchange',()=>{
