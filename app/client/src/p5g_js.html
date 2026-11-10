@@ -105,14 +105,17 @@ function renderPlans(){
     <div class="limit">Up to <b>${p.limit}</b> active employees · ${esc(p.blurb)}</div>
     <ul>${PRICING.included.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
     <a class="btn ${p.featured?'btn-primary':'btn-ghost'}" href="#signup">${esc(p.cta)}</a></div>`).join('');
+  // cards redrawn after the page has loaded (live prices arrive from the server) still need their fade-in
+  if(window.REVEAL_IO) $$('#plans .reveal').forEach(el=>window.REVEAL_IO.observe(el));
+  else if(window.REVEAL_ALL) $$('#plans .reveal').forEach(el=>el.classList.add('in'));
 }
 renderPlans();
 const nav=$('#siteNav'); const onScroll=()=>nav.classList.toggle('scrolled',window.scrollY>8); window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
 $('#menuBtn').addEventListener('click',()=>{ const o=$('#navLinks').classList.toggle('open'); $('#menuBtn').setAttribute('aria-expanded',o); });
 $$('#navLinks a').forEach(a=>a.addEventListener('click',()=>{ $('#navLinks').classList.remove('open'); $('#menuBtn').setAttribute('aria-expanded','false'); }));
 const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-if(reduce||!('IntersectionObserver' in window)){ $$('.reveal').forEach(el=>el.classList.add('in')); }
-else { const io=new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }),{threshold:.12,rootMargin:'0px 0px -40px 0px'}); $$('.reveal').forEach(el=>io.observe(el)); }
+if(reduce||!('IntersectionObserver' in window)){ window.REVEAL_ALL=true; $$('.reveal').forEach(el=>el.classList.add('in')); }
+else { const io=new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }),{threshold:.12,rootMargin:'0px 0px -40px 0px'}); window.REVEAL_IO=io; $$('.reveal').forEach(el=>io.observe(el)); }
 
 boot();
 })();
