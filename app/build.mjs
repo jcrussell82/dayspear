@@ -42,8 +42,10 @@ if (SB_KEY.startsWith('sb_secret_') || (SB_KEY.startsWith('eyJ') && /service_rol
 }
 if (SB_URL && !/^https?:\/\/[\w.:-]+$/.test(SB_URL)) { console.error('SUPABASE_URL should look like https://<project-ref>.supabase.co'); process.exit(1); }
 // No inline scripts or third-party code: only this site and your Supabase project.
-const csp = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob:", `connect-src 'self'${SB_URL ? ' ' + SB_URL : ''}`, "base-uri 'self'", "form-action 'self'"].join('; ');
+// Google Tag Manager / Analytics are allowed here but only loaded on public marketing pages (see p5q_real).
+const GA = 'https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com';
+const csp = ["default-src 'self'", "script-src 'self' https://www.googletagmanager.com", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
+  `img-src 'self' data: blob: ${GA}`, `connect-src 'self'${SB_URL ? ' ' + SB_URL : ''} ${GA}`, "base-uri 'self'", "form-action 'self'"].join('; ');
 const page = html.slice(0, styleStart).replace('<meta charset="utf-8">', `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${csp}">`)
   + '<link rel="stylesheet" href="app.css">' + html.slice(styleEnd + 8, scriptStart) + '<script src="config.js"></script>\n<script src="app.js" defer></script>' + html.slice(scriptEnd + 9);
 
